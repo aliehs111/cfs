@@ -21,6 +21,7 @@ create table project_responses (
   id uuid primary key default gen_random_uuid(),
   project_description text,
   ai_output text,
+  role text,
   created_at timestamptz default now()
 );
 

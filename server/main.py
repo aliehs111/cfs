@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes.projects import router as projects_router
 from routes.intake import router as intake_router
+from routes.contact import router as contact_router
 
 app = FastAPI(title="Cavalier Flooring API")
 
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(projects_router, prefix="/api")
 app.include_router(intake_router, prefix="/api")
+app.include_router(contact_router, prefix="/api")
 
 
 @app.get("/api/health")

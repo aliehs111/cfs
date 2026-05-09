@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import ContactModal from '../components/ContactModal'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -8,6 +9,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [contactOpen, setContactOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -221,20 +223,27 @@ export default function ProjectDetailPage() {
 
       <div className="hairline mt-24" />
       <div className="mt-12">
-        <Link
-          to="/contact"
+        <button
+          type="button"
+          onClick={() => setContactOpen(true)}
           className="nav-link font-display"
           style={{
             fontSize: '1.4rem',
             display: 'inline-block',
+            background: 'transparent',
+            border: 'none',
             borderBottom: '1px solid rgba(236, 228, 215, 0.25)',
+            borderRadius: 0,
+            padding: 0,
             paddingBottom: '0.15rem',
             letterSpacing: '-0.01em',
+            cursor: 'pointer',
           }}
         >
           Discuss a similar project →
-        </Link>
+        </button>
       </div>
+      <ContactModal isOpen={contactOpen} onClose={() => setContactOpen(false)} />
     </section>
   )
 }

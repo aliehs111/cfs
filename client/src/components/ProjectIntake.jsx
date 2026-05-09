@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import ContactModal from './ContactModal'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -26,6 +26,7 @@ export default function ProjectIntake() {
   const [followupInput, setFollowupInput] = useState('')
   const [streamingText, setStreamingText] = useState('')
   const [error, setError] = useState('')
+  const [contactOpen, setContactOpen] = useState(false)
 
   const handleStart = (chosenRole) => {
     setRole(chosenRole)
@@ -477,20 +478,27 @@ export default function ProjectIntake() {
             </p>
             <div className="hairline mb-10" />
             <div className="flex gap-8 items-center">
-              <Link
-                to="/contact"
-                onClick={stashAndContinue}
+              <button
+                type="button"
+                onClick={() => {
+                  stashAndContinue()
+                  setContactOpen(true)
+                }}
                 className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={{
                   color: 'var(--maroon)',
                   letterSpacing: '0.14em',
+                  background: 'transparent',
+                  border: 'none',
                   borderBottom: '1px solid rgba(123,30,44,0.55)',
+                  borderRadius: 0,
+                  padding: 0,
                   paddingBottom: '3px',
-                  textDecoration: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 Let's Talk →
-              </Link>
+              </button>
               <button
                 onClick={handleReset}
                 className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
@@ -510,6 +518,7 @@ export default function ProjectIntake() {
           </div>
         )}
       </div>
+      <ContactModal isOpen={contactOpen} onClose={() => setContactOpen(false)} />
     </section>
   )
 }

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import Home from './pages/Home'
@@ -23,7 +25,7 @@ function PageTracker() {
     if (path.startsWith('/admin')) return
     if (lastTracked.current === path) return
     lastTracked.current = path
-    fetch('/api/track/visit', {
+    fetch(`${API_BASE}/api/track/visit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

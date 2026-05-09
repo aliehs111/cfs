@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 const STATES = {
   INTRO: 'intro',
   INPUT: 'input',
@@ -36,7 +38,7 @@ export default function ProjectIntake() {
     setState(STATES.LOADING)
 
     try {
-      const res = await fetch('/api/project-intake', {
+      const res = await fetch(`${API_BASE}/api/project-intake`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages, role }),

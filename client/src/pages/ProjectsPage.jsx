@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 const PROJECT_TYPES = [
   'All',
   'Healthcare',
@@ -19,7 +21,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/projects')
+    fetch(`${API_BASE}/api/projects`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((data) => {
         if (!cancelled) {

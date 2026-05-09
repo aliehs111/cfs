@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 export default function ProjectDetailPage() {
   const { slug } = useParams()
   const [project, setProject] = useState(null)
@@ -12,7 +14,7 @@ export default function ProjectDetailPage() {
     setLoading(true)
     setError(null)
     setProject(null)
-    fetch(`/api/projects/${slug}`)
+    fetch(`${API_BASE}/api/projects/${slug}`)
       .then((r) => {
         if (r.status === 404) return Promise.reject('not_found')
         if (!r.ok) return Promise.reject('failed')

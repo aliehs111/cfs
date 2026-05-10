@@ -91,6 +91,18 @@ export default function Home() {
         >
           Flooring Systems
         </p>
+        <p
+          className="mt-12 md:mt-16"
+          style={{
+            fontSize: '1rem',
+            letterSpacing: '0.28em',
+            color: 'var(--off-white)',
+            opacity: 0.65,
+            marginLeft: 'calc(0.13 * clamp(4rem, 18vw, 13rem))',
+          }}
+        >
+          Since 1981
+        </p>
       </div>
     </section>
   )

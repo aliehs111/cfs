@@ -20,14 +20,43 @@ export default function Nav() {
       <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between gap-6">
         <NavLink
           to="/"
-          className="font-display no-underline"
+          className="no-underline"
           style={{
-            color: 'var(--off-white)',
-            fontSize: '1.1rem',
-            letterSpacing: '0.02em',
+            display: 'inline-block',
+            borderBottom: '1px solid var(--maroon)',
+            paddingBottom: '4px',
           }}
         >
-          Cavalier Flooring Systems
+          <span
+            style={{
+              display: 'block',
+              color: 'var(--off-white)',
+              fontFamily: 'var(--font-body, "DM Sans"), system-ui, sans-serif',
+              fontSize: '1.05rem',
+              fontWeight: 500,
+              letterSpacing: '0.04em',
+              lineHeight: 1,
+              textTransform: 'uppercase',
+            }}
+          >
+            Cavalier
+          </span>
+          <span
+            style={{
+              display: 'block',
+              color: 'var(--off-white)',
+              fontFamily: 'var(--font-body, "DM Sans"), system-ui, sans-serif',
+              fontSize: '0.55rem',
+              fontWeight: 500,
+              letterSpacing: '0.28em',
+              opacity: 0.85,
+              marginTop: '3px',
+              lineHeight: 1,
+              textTransform: 'uppercase',
+            }}
+          >
+            Flooring Systems
+          </span>
         </NavLink>
         <nav className="flex gap-8">
           {NAV_LINKS.map(({ to, label, exact }) => (

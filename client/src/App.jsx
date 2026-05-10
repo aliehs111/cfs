@@ -10,6 +10,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 import DiscussPage from './pages/DiscussPage'
 import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
+import AdminPage from './pages/AdminPage'
 
 function PageTracker() {
   const location = useLocation()
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/discuss" element={<DiscussPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>
       <Footer />

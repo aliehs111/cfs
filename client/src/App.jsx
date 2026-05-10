@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 const API_BASE = import.meta.env.VITE_API_URL || ''
 import Nav from './components/Nav'
 import Footer from './components/Footer'
+import ChatWidget from './components/ChatWidget'
 import Home from './pages/Home'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -39,6 +40,12 @@ function PageTracker() {
   return null
 }
 
+function ChatGate() {
+  const location = useLocation()
+  if (location.pathname.startsWith('/admin')) return null
+  return <ChatWidget />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -56,6 +63,7 @@ export default function App() {
         </Routes>
       </main>
       <Footer />
+      <ChatGate />
     </BrowserRouter>
   )
 }

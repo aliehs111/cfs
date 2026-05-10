@@ -5,13 +5,19 @@ load_dotenv()
 
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from limiter import limiter
 from routes.projects import router as projects_router
 from routes.intake import router as intake_router
 from routes.contact import router as contact_router
 from routes.admin import router as admin_router
+from routes.chat import router as chat_router
 
 app = FastAPI(title="Cavalier Flooring API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +35,7 @@ app.include_router(projects_router, prefix="/api")
 app.include_router(intake_router, prefix="/api")
 app.include_router(contact_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
 
 
 @app.get("/api/health")

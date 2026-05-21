@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import ChatWidget from './components/ChatWidget'
+import UpdateBanner from './components/UpdateBanner'
 import Home from './pages/Home'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -49,6 +50,7 @@ function ChatGate() {
 export default function App() {
   return (
     <BrowserRouter>
+      <UpdateBanner />
       <PageTracker />
       <Nav />
       <main>

@@ -10,14 +10,35 @@ I'm the founder. I recently built the CTX201 website with Claude Code (it lives 
 
 ---
 
+## Current build status
+
+As of the last audit, the build order is approximately:
+
+| Step | Item | Status |
+|---|---|---|
+| 1 | Scaffold + design system | ✅ Done |
+| 2 | Static pages (Nav, Footer, About, Home) | ✅ Done |
+| 3 | Database migrations + seed data | ✅ Done |
+| 4 | Project gallery (`/projects`) | ✅ Done |
+| 5 | Project detail (`/projects/:slug`) | ✅ Done |
+| 6 | Contact form + modal | ✅ Done |
+| 7 | Project-intake AI tool (`/discuss`) | ✅ Done |
+| 8 | Chat widget | ✅ Done |
+| 9 | Admin panel | ⚠️ Partial — Submissions + Intakes tabs built; Projects and Logs tabs remaining |
+| 10 | Image upload UI | ❌ Not started |
+| 11 | Logging (log_event helper + route instrumentation) | ❌ Not started — `/api/track/visit` is a stub (returns 204, no DB write) |
+| 12 | Polish + deploy | ❓ Unknown |
+
+---
+
 ## Tech stack (match CTX201 — proven)
 
 - **Frontend:** React 19 + Vite + Tailwind v4 + react-router-dom v7
-- **Backend:** FastAPI + Supabase + Anthropic SDK (Claude sonnet-4.5 for the AI tool, haiku-4.5 for the chat widget)
+- **Backend:** FastAPI + Supabase + Anthropic SDK (`anthropic==0.40.0`, pinned in `requirements.txt`) — claude-sonnet-4-5 for the project-intake tool, claude-haiku-4-5 for the chat widget
 - **Hosting:** Railway (frontend + backend each as a service; Supabase managed)
-- **Auth:** admin-only password + signed cookie session. **No public user auth in v1.**
-- **Rate limiting:** slowapi, same patterns
-- **Logging:** Supabase `logs` table + the `log_event()` helper pattern
+- **Auth:** admin-only password + signed cookie session (7-day TTL). **No public user auth in v1.**
+- **Rate limiting:** slowapi, same patterns as CTX201
+- **Logging:** Supabase `logs` table defined in schema. `logger.py` / `log_event()` **not yet implemented** — see build status above.
 
 ---
 
@@ -48,7 +69,8 @@ Match the CTX201 typography rhythm: large display headlines with tight letter-sp
 - **Hairline dividers** between sections (`1px solid rgba(<color>, 0.08)`).
 - **Eyebrow labels** above section headlines: small, uppercase, wide letter-spacing (`0.14em`–`0.16em`), often in maroon.
 - **Sticky-footer flex layout:** `#root { display: flex; flex-direction: column; min-height: 100vh; }` with `main { flex: 1 }`. Background is the dominant surface color (charcoal here, was navy on CTX201).
-- **Scroll-to-top on route change** + page-view tracking. Lift the `<PageTracker />` component from CTX201's `client/src/App.jsx`.
+- **Scroll-to-top on route change** + page-view tracking. `<PageTracker />` component lives in `client/src/App.jsx`.
+- **`<ChatGate />`** component in `App.jsx` suppresses the chat widget on admin pages — render `<ChatWidget />` conditionally based on `location.pathname.startsWith('/admin')`.
 - **Vite HMR fix:** copy the `server.watch.usePolling: true` config from CTX201's `vite.config.js` so file changes reliably trigger reloads on macOS.
 
 ---
@@ -79,30 +101,47 @@ Standard about page. Photo, story, the team, principles. Founder will provide co
 - Lift `ContactForm.jsx` + `ContactModal.jsx` from CTX201 verbatim, then reskin colors.
 - Includes an **"Optional first step"** block above the form linking to the Describe-Your-Project tool. Same pattern CTX201 uses on contact for its Interview / Possibilities tools. The tool's input flows into the contact submission via `sessionStorage`. See `formatLeadContext()` in CTX201's `ContactForm.jsx` for the format.
 
+### `/discuss` — Describe Your Project (project intake tool)
+Multi-turn AI conversation. Visitor selects a role (owner/facility vs. GC/specifier) then describes their project in free text. The backend (`server/routes/intake.py`) runs a 3-turn conversation with role-specific and turn-aware system prompts:
+
+- **Turn 1:** reflect if description is rich enough; ask one clarifying question if too sparse
+- **Turns 2–3:** prefer to give the reflection; one more question only if critical
+- **Turn 4+ (final):** forced wrap-up — no questions, name outstanding items as discussion points for the phone call
+
+Two role tracks with different guidance:
+- **Owner/facility:** help them think through product fit and things they may not have considered
+- **GC/specifier (contractor/architect/designer):** assume they know the product; focus on scope fit, geography, schedule, sequencing concerns
+
+Saves to `project_responses` table only when the conversation is "complete" (AI response doesn't end with a question, or it's the final turn).
+
+After the result: a "Let's Talk →" button opens the contact modal with the AI exchange pre-attached.
+
 ### `/admin` — Admin (private)
-Reuse CTX201's auth + nav pattern. Tabs:
-- **Submissions** — contact form rows
-- **Project Intakes** — AI tool's Q&A history
-- **Projects** — *new* — CRUD UI to add/edit gallery projects (form + image upload)
-- **Logs** — system + user activity logs
+Password + signed cookie auth (7-day session). Tabs currently built:
+- **Submissions** — contact form rows ✅
+- **Project Intakes** — AI tool conversation history ✅
+
+Tabs remaining:
+- **Projects** — CRUD UI to add/edit gallery projects (form + image upload) ❌
+- **Logs** — system + user activity logs ❌
 
 ---
 
-## AI tools (lifted from CTX201)
+## AI tools
 
-### Describe-Your-Project (analogous to CTX201's Interview)
-Pattern based on `Interactive.jsx` + `routes/readiness.py`:
-- Free-form text input. Visitor describes: space type, approximate square footage, current floor (if any), intended use, timeline, budget if comfortable.
-- POST to `/api/project-intake`.
-- Backend calls Claude sonnet-4.5 with a system prompt in Cavalier's voice: warm, expert, plainspoken. The AI reflects the project back, names the likely product type (LVT, polished concrete, carpet tile, etc.), surfaces 1–2 things to think about, and ends with what the natural next step is. **Never gives a hard quote** — that's a real conversation.
-- Saves description + AI output to `project_responses`.
-- After the result: a "Let's Talk →" button opens the contact modal with the AI exchange pre-attached.
+### Describe-Your-Project (`/discuss`)
+See page description above. The implementation in `server/routes/intake.py` is the authoritative source. Key notes:
+- Uses claude-sonnet-4-5
+- Role field (`owner` / `specifier`) is captured from the UI and passed to the API
+- System prompt is assembled from: `BASE_PROMPT + role_guidance + turn_addendum`
+- **Product scope in `intake.py` currently uses the old 5-category list** (LVT, VCT, carpet tile, sheet vinyl, ceramic tile). This is out of sync with the updated `knowledge_base.md`, which now includes wall tile, specialty wall panels, and concrete slab services. The intake system prompt needs a pass to align with the full scope.
 
-### Chatbot (same as CTX201's ChatWidget)
-- Floating bubble in the corner.
-- Knowledge base: `server/knowledge_base.md` — founder writes the content (what they install, what they don't, geographies, response time, basic FAQ).
-- Claude haiku-4.5 for cost.
-- Rate-limited 30/day per IP, same as CTX201.
+### Chat widget (`ChatWidget.jsx`)
+- Floating bubble in the corner; hidden on `/admin` via `<ChatGate />` in `App.jsx`
+- Knowledge base: `server/knowledge_base.md` — read fresh on every request; no restart needed to pick up edits
+- System prompt: thin wrapper in `server/routes/chat.py` — all behavioral rules and guidance live in the KB file itself
+- Claude haiku-4-5 for cost
+- Rate-limited 30/day per IP
 
 ---
 
@@ -117,19 +156,20 @@ RLS disabled by default; admin queries use the service role key. All non-PK colu
 
 ### `project_responses` (analogous to `readiness_responses`)
 - `id` uuid PK
-- `project_description` text — what the visitor wrote
-- `ai_output` text — Claude's response
+- `project_description` text — first user message in the conversation
+- `ai_output` text — Claude's final response
+- `role` text — `"owner"` or `"specifier"` (from intake UI role selection)
 - `created_at` timestamptz default `now()`
 
 ### `projects` *(new — gallery storage)*
 - `id` uuid PK
 - `slug` text UNIQUE — URL-friendly identifier
 - `name` text
-- `project_type` text — values from a finalized list (TBD with founder)
+- `project_type` text — values from a finalized list (seed data uses: Healthcare, Retail, Multi-family)
 - `location` text — e.g., "Charlottesville, VA"
 - `year` int
 - `square_footage` int
-- `flooring_type` text — "LVT", "Polished Concrete", "Carpet Tile", etc.
+- `flooring_type` text — "LVT", "Sheet Vinyl", "Carpet Tile", etc.
 - `short_description` text — card-level
 - `long_description` text — detail page
 - `image_urls` text[] — array of Supabase storage URLs
@@ -139,7 +179,7 @@ RLS disabled by default; admin queries use the service role key. All non-PK colu
 ### `logs` (identical to CTX201)
 - `id`, `level`, `event`, `route`, `message`, `metadata` (jsonb), `created_at`.
 - Levels: `info` / `warning` / `error`.
-- Same `log_event()` helper.
+- `log_event()` helper **not yet implemented** — table exists but nothing writes to it.
 
 ---
 
@@ -157,23 +197,19 @@ Alternative: Cloudinary (better transforms + CDN, but adds a service). Default t
 
 ## Reused infrastructure (lift verbatim from CTX201, reskin only)
 
-| What | Where in CTX201 |
-|---|---|
-| Themed contact form (light + dark) | `client/src/components/ContactForm.jsx` |
-| Modal wrapper for contact | `client/src/components/ContactModal.jsx` |
-| Multi-step Q&A AI tool UI | `client/src/components/Interactive.jsx` |
-| Streaming AI tool UI | `client/src/components/FitAssessment.jsx` |
-| Floating chat widget | `client/src/components/ChatWidget.jsx` |
-| Page tracking + scroll-to-top | `client/src/App.jsx` (`<PageTracker />`) |
-| Sticky-footer + body bg | `client/src/index.css` |
-| HMR polling fix | `client/vite.config.js` |
-| Admin auth + cookie | `server/routes/admin.py` |
-| Admin panel UI | `client/src/pages/AdminPage.jsx` |
-| Logging helper | `server/logger.py` |
-| Page-view tracking endpoint | `server/routes/tracking.py` |
-| Rate-limit handler that logs | `server/main.py` (`rate_limit_handler`) |
-
-**Lift, don't reinvent.** If CTX201's pattern works, use it. Spend creative energy on what's actually new (gallery + image upload + the project-intake AI prompt).
+| What | CTX201 origin | CFS equivalent |
+|---|---|---|
+| Themed contact form (light + dark) | `client/src/components/ContactForm.jsx` | `client/src/components/ContactForm.jsx` |
+| Modal wrapper for contact | `client/src/components/ContactModal.jsx` | `client/src/components/ContactModal.jsx` |
+| Multi-turn AI tool UI | `client/src/components/Interactive.jsx` | `client/src/components/ProjectIntake.jsx` |
+| Floating chat widget | `client/src/components/ChatWidget.jsx` | `client/src/components/ChatWidget.jsx` |
+| Page tracking + scroll-to-top | `client/src/App.jsx` (`<PageTracker />`) | `client/src/App.jsx` (`<PageTracker />`, `<ChatGate />`) |
+| Sticky-footer + body bg | `client/src/index.css` | `client/src/index.css` |
+| HMR polling fix | `client/vite.config.js` | `client/vite.config.js` |
+| Admin auth + cookie | `server/routes/admin.py` | `server/routes/admin.py` |
+| Admin panel UI | `client/src/pages/AdminPage.jsx` | `client/src/pages/AdminPage.jsx` |
+| Logging helper | `server/logger.py` | **Not yet implemented** |
+| Rate-limit handler that logs | `server/main.py` (`rate_limit_handler`) | `server/main.py` |
 
 ---
 
@@ -188,38 +224,37 @@ Alternative: Cloudinary (better transforms + CDN, but adds a service). Default t
 
 ---
 
-## Things to ASK before writing code
-
-The new Claude Code session should ask the founder these *before* scaffolding:
+## Things to ASK / confirm with founder
 
 1. **Exact maroon hex.** Pull from existing brand assets (logo, business card, vehicle wrap) — don't pick fresh.
-2. **Project types list.** Healthcare / Retail / Multi-family / Office / Education / Industrial / Hospitality / other?
-3. **Flooring types list.** LVT / Polished Concrete / Carpet Tile / Sheet Vinyl / Rubber / Wood / Tile / other?
-4. **Geographic markers.** Cities/regions Cavalier serves. Used in About + on each project.
-5. **Knowledge base content** for the chatbot. Founder writes; do not invent.
-6. **Cavalier's voice.** Read CTX201's voice if helpful — calm, plainspoken, confident, not salesy. Confirm Cavalier wants the same tone or something different.
+2. **Project types list.** Seed data uses Healthcare / Retail / Multi-family — confirm full list before building admin CRUD.
+3. **Flooring types list.** Seed data uses LVT / Sheet Vinyl / Carpet Tile — confirm full list. Note: the KB now covers wall tile, specialty panels, and concrete slab services; the intake system prompt still uses the old 5-category list and needs a pass.
+4. **Geographic markers.** Cities/regions Cavalier serves. Used in About + on each project. Currently in intake.py: Charlottesville, Central VA up to Fredericksburg, Tidewater (Virginia Beach, Norfolk).
+5. **Knowledge base content** for the chatbot. Currently seeded from the context seed document — confirm it's complete or add more.
+6. ~~**Cavalier's voice.**~~ Confirmed: calm, plainspoken, confident, not salesy. Established in intake.py system prompt and KB.
 7. **Logo / wordmark.** What format do they have it in? SVG ideal, PNG ok.
-8. **Chatbot scope.** Lead-capture-leaning ("tell me about your project") or general-info-leaning (FAQ-style)? CTX201's is general-info. Flooring contractors often want lead-capture. Confirm.
-9. **Project-intake AI: what's the suggested next step?** Site visit? Phone call? An info packet? Must be defined *before* writing the system prompt.
-10. **Private/NDA projects.** Are there clients Cavalier can't name publicly? If yes, the `projects.is_public` flag handles it; if no, drop the column.
-11. **Admin user(s).** Just the founder, or multiple admins? CTX201 has one admin password — same pattern OK?
+8. ~~**Chatbot scope.**~~ General-info FAQ style (from ChatWidget opening message). The `/discuss` tool handles lead-capture.
+9. ~~**Project-intake AI: what's the suggested next step?**~~ Phone call. Established in intake.py: "the natural next step is a quick phone conversation."
+10. **Private/NDA projects.** Are there clients Cavalier can't name publicly? If yes, `projects.is_public` handles it; if no, drop the column.
+11. ~~**Admin user(s).**~~ One admin password, same pattern as CTX201.
 
 ---
 
-## Suggested build order
+## Suggested build order (remaining work)
 
-1. **Scaffold + design system.** Vite + React + Tailwind config, CSS variables (charcoal, cream, maroon, black), font imports, sticky-footer layout, page-tracker / scroll-to-top.
-2. **Static pages first.** Nav, Footer, About, basic Home. No data yet.
-3. **Database migrations.** Create the four tables in Supabase. Seed `projects` with 2–3 sample rows so the gallery has something to render.
-4. **Project gallery.** `/projects` reading from Supabase with filter chips and search input.
-5. **Project detail.** `/projects/:slug`.
-6. **Contact form + modal.** Lift from CTX201, reskin.
-7. **Project-intake AI tool.** Backend route, frontend Q&A UI, sessionStorage handoff to contact modal.
-8. **Chat widget.** Backend route, knowledge_base.md, frontend bubble.
-9. **Admin panel.** Auth, then the four tabs.
-10. **Image upload UI.** Inside admin → Projects.
-11. **Logging.** Add `log_event()` to every user-facing route entry. Add page-view tracking. Add rate-limit handler.
-12. **Polish + deploy.** Railway services, env vars, Supabase bucket policies.
+1. ~~Scaffold + design system~~ ✅
+2. ~~Static pages first~~ ✅
+3. ~~Database migrations~~ ✅
+4. ~~Project gallery~~ ✅
+5. ~~Project detail~~ ✅
+6. ~~Contact form + modal~~ ✅
+7. ~~Project-intake AI tool~~ ✅
+8. ~~Chat widget~~ ✅
+9. **Admin panel — Projects + Logs tabs** ← next up
+10. **Image upload UI** (inside admin → Projects)
+11. **Logging** — implement `log_event()`, instrument routes, wire `/api/track/visit` to write to DB
+12. **Intake system prompt** — update product scope to match the updated KB (wall tile, specialty panels, slab services)
+13. **Polish + deploy** — Railway services, env vars, Supabase bucket policies
 
 Each step should leave the app deployable. Don't stack 5 partial features.
 

@@ -1,0 +1,16 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Dependencies / build output (covered by subdirectory gitignores too)
+node_modules/
+dist/

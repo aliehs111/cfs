@@ -5,7 +5,7 @@ import { execSync } from 'child_process'
 
 let appVersion
 try {
-  appVersion = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  appVersion = execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 } catch {
   appVersion = Date.now().toString(36)
 }

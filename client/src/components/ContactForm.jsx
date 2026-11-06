@@ -29,6 +29,8 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     message: '',
   })
   const [status, setStatus] = useState('idle')
+  // Spam trap: hidden from people, but bots fill in every field.
+  const [trap, setTrap] = useState('')
   const [leadContext, setLeadContext] = useState(null)
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       const res = await fetch(`${API_BASE}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, message: messageWithContext }),
+        body: JSON.stringify({ ...form, message: messageWithContext, cf_extra: trap }),
       })
       if (!res.ok) throw new Error('Failed')
       sessionStorage.removeItem('cavalier_lead_context')
@@ -128,6 +130,22 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      <div
+        aria-hidden="true"
+        style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', overflow: 'hidden' }}
+      >
+        <label>
+          Leave this field empty
+          <input
+            type="text"
+            name="cf_extra"
+            tabIndex={-1}
+            autoComplete="off"
+            value={trap}
+            onChange={(e) => setTrap(e.target.value)}
+          />
+        </label>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
         <div>
           <label style={labelStyle}>Name *</label>

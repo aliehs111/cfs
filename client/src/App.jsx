@@ -13,6 +13,12 @@ import DiscussPage from './pages/DiscussPage'
 import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
+import FieldPage from './pages/FieldPage'
+import FieldPostPage from './pages/FieldPostPage'
+import NotFoundPage from './pages/NotFoundPage'
+
+// Staff-only pages: no chat bubble, no visit tracking.
+const isStaffPath = (path) => path.startsWith('/admin') || path.startsWith('/in-the-field/post')
 
 function PageTracker() {
   const location = useLocation()
@@ -25,7 +31,7 @@ function PageTracker() {
       window.scrollTo(0, 0)
     }
 
-    if (path.startsWith('/admin')) return
+    if (isStaffPath(path)) return
     if (lastTracked.current === path) return
     lastTracked.current = path
     fetch(`${API_BASE}/api/track/visit`, {
@@ -43,7 +49,7 @@ function PageTracker() {
 
 function ChatGate() {
   const location = useLocation()
-  if (location.pathname.startsWith('/admin')) return null
+  if (isStaffPath(location.pathname)) return null
   return <ChatWidget />
 }
 
@@ -60,8 +66,11 @@ export default function App() {
           <Route path="/projects/:slug" element={<ProjectDetailPage />} />
           <Route path="/discuss" element={<DiscussPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/in-the-field" element={<FieldPage />} />
+          <Route path="/in-the-field/post" element={<FieldPostPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
       <Footer />

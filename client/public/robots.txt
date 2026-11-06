@@ -1,0 +1,8 @@
+# Staff-only pages: keep them out of search results.
+# (Not a security measure; those pages are password-protected.)
+User-agent: *
+Disallow: /admin
+Disallow: /in-the-field/post
+
+# TODO (specs.md §3): add "Sitemap: https://<domain>/sitemap.xml" once the
+# site is on the client's domain and a sitemap is generated.

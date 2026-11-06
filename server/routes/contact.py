@@ -1,6 +1,7 @@
 import traceback
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from limiter import limiter
 from supabase_client import get_supabase
 
 router = APIRouter()
@@ -12,10 +13,17 @@ class ContactPayload(BaseModel):
     email: str
     phone: str = ""
     message: str = ""
+    # Honeypot: a hidden field real visitors never see. Bots fill it in.
+    cf_extra: str = ""
 
 
 @router.post("/contact")
-async def submit_contact(payload: ContactPayload):
+@limiter.limit("5/hour;20/day")
+async def submit_contact(request: Request, payload: ContactPayload):
+    if payload.cf_extra.strip():
+        # Pretend it worked so the bot moves on; save nothing.
+        return {"status": "ok"}
+
     if not payload.name.strip() or not payload.email.strip():
         raise HTTPException(status_code=400, detail="Name and email are required.")
 

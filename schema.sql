@@ -63,13 +63,14 @@ create index logs_created_at_idx on logs (created_at desc);
 create index logs_level_idx on logs (level);
 
 -- =========================================================
--- RLS — disabled (backend uses service_role key for all queries)
+-- RLS — enabled with no policies (Nov 2026). This blocks the public anon key
+-- entirely; the backend uses the service_role key, which bypasses RLS.
 -- =========================================================
 
-alter table contacts disable row level security;
-alter table project_responses disable row level security;
-alter table projects disable row level security;
-alter table logs disable row level security;
+alter table contacts enable row level security;
+alter table project_responses enable row level security;
+alter table projects enable row level security;
+alter table logs enable row level security;
 
 -- =========================================================
 -- SEED DATA — sample projects so the gallery renders during dev
@@ -116,3 +117,38 @@ insert into projects (slug, name, project_type, location, year, square_footage, 
   array[]::text[],
   true
 );
+
+-- =========================================================
+-- IN THE FIELD (added Nov 2026) — run this block on its own if the
+-- tables above already exist.
+-- =========================================================
+
+-- 5. Staff posts from job sites (photos/videos + caption)
+create table if not exists field_posts (
+  id uuid primary key default gen_random_uuid(),
+  caption text,
+  location text,
+  author text,
+  media jsonb not null default '[]'::jsonb,  -- [{ "path", "url", "type": "image" | "video" }]
+  is_public boolean default true,
+  created_at timestamptz default now()
+);
+
+create index if not exists field_posts_created_at_idx on field_posts (created_at desc);
+-- RLS on with no policies: blocks the anon/authenticated keys entirely.
+-- The backend uses the service_role key, which bypasses RLS.
+alter table field_posts enable row level security;
+
+-- Public storage bucket for the photos/videos. Uploads go through signed
+-- URLs issued by the backend, so no storage policies are needed.
+-- file_size_limit: 50 MB matches the Supabase free-plan cap. On Pro you can
+-- raise it (and MAX_VIDEO_MB in client/src/pages/FieldPostPage.jsx).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'field-media',
+  'field-media',
+  true,
+  52428800,
+  array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
+)
+on conflict (id) do nothing;

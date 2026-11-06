@@ -9,9 +9,29 @@ from supabase_client import get_supabase
 
 router = APIRouter()
 
-BASE_PROMPT = """You are responding on behalf of Cavalier Flooring Systems, a commercial flooring contractor serving Charlottesville, Central Virginia up to Fredericksburg, and the Tidewater region (Virginia Beach, Norfolk). Cavalier works with commercial general contractors, architects, facility managers, and end-user owners. We do not work residential.
+def get_knowledge_base() -> str:
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge_base.md")
+    with open(kb_path, "r", encoding="utf-8") as f:
+        return f.read()
 
-Cavalier installs these flooring categories: LVT (luxury vinyl tile), VCT (vinyl composition tile), carpet tile, sheet vinyl, and ceramic tile. Note that LVT has largely replaced VCT in commercial work because it's more durable and doesn't require stripping and waxing — but VCT is still used in cost-sensitive spaces and Cavalier still installs it.
+
+# Company facts (scope, service area, K-12, residential, F&I, etc.) live in
+# knowledge_base.md, shared with the chat widget. This file only holds what's
+# specific to the /discuss conversation.
+KB_PREAMBLE = """You are responding on behalf of Cavalier Flooring Systems through the "Tell us about your project" tool on Cavalier's website. A visitor describes a project and you give a short, specific reflection, then suggest a phone call.
+
+The company knowledge base below is the authoritative source for facts about Cavalier: what it does, what it doesn't do, where it works, and how it talks. Never contradict it. Its length and "route to Contact" guidance is written for the site's chat widget; for this tool, follow the format rules after the knowledge base instead.
+
+<knowledge_base>
+{knowledge_base}
+</knowledge_base>
+
+"""
+
+BASE_PROMPT = """Fit comes first. Before giving any product or installation advice, check the project against the knowledge base's "What Cavalier is not" list and service area:
+- K-12 schools (elementary, middle, or high schools, public or private): Cavalier doesn't usually take this work. Say so plainly and kindly in your first sentence. Do NOT give flooring recommendations for the school, do NOT ask clarifying questions about it, and do NOT describe K-12 as typical work. Say the team can confirm on a quick call whether there's any fit, and stop. Colleges and universities are NOT K-12; treat them as normal commercial work.
+- Outside the service area: say plainly where Cavalier works, and still suggest the call so the team can say whether it's a fit.
+This fit check overrides everything below, including any instruction to ask a clarifying question.
 
 Whether this is new construction or a renovation materially shapes the work. New construction means working into the GC's schedule and starting from a clean substrate. A renovation means there's an existing floor to deal with — and what matters technically is knowing what's down now (sheet vinyl, VCT, carpet tile, ceramic, polished concrete, etc.) because that determines the floor prep required before the new floor goes in. Removing the existing floor isn't always Cavalier's scope — sometimes a separate demo contractor handles it, sometimes Cavalier does the removal and disposal as a line item, and sometimes the existing floor stays. Don't assume Cavalier is doing the demo unless they've said so. There's also often furniture, equipment, or technology that needs to be moved or worked around. If the visitor told you the relevant details, factor that into your reflection. If they didn't, name it as one of the things to think about.
 
@@ -105,7 +125,13 @@ async def project_intake(payload: IntakePayload):
     else:
         turn_addendum = TURN_1_ADDENDUM
     role_guidance = SPECIFIER_GUIDANCE if payload.role == "specifier" else OWNER_GUIDANCE
-    system_prompt = BASE_PROMPT + role_guidance + turn_addendum
+    # .replace, not .format: the knowledge base may contain braces.
+    system_prompt = (
+        KB_PREAMBLE.replace("{knowledge_base}", get_knowledge_base())
+        + BASE_PROMPT
+        + role_guidance
+        + turn_addendum
+    )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 

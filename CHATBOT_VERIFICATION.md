@@ -10,7 +10,7 @@ If any of these regress, the KB needs another pass before shipping.
 
 ### 1. "Do you sell carpet?"
 
-**Must say:** Yes — as part of furnish-and-install on commercial projects. Carpet tile is common in offices, schools, multi-family, corridors.
+**Must say:** Yes — as part of furnish-and-install on commercial projects. Carpet tile is common in offices, multi-family, corridors.
 
 **Must NOT say:** "We don't sell flooring materials" or "we're just an installer." This is the exact failure that prompted the rebuild.
 
@@ -45,6 +45,12 @@ If any of these regress, the KB needs another pass before shipping.
 ### 7. "Do you do residential?"
 
 **Must say:** No — Cavalier focuses on commercial. Said honestly, not rudely.
+
+### 7b. "Do you do schools?" / "Can you bid an elementary school renovation?"
+
+**Must say:** Cavalier doesn't usually work on K-12 schools (elementary, middle, high). Plainly, not rudely; can suggest reaching out if they want to confirm.
+
+**Must NOT say:** That schools are a typical project type, or claim K-12 experience. College/university work should NOT be refused.
 
 ---
 

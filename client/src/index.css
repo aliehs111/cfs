@@ -86,6 +86,22 @@ main {
   border-bottom-color: var(--maroon);
 }
 
+/* Staff entrance on the In the Field page */
+.hard-hat-link {
+  display: inline-flex;
+  padding: 10px; /* comfortable tap target */
+  margin: -10px;
+  color: var(--off-white);
+  opacity: 0.3;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.hard-hat-link:hover,
+.hard-hat-link:focus-visible {
+  opacity: 1;
+  color: var(--maroon);
+}
+
 /* Filter chips */
 .filter-chip {
   background: transparent;

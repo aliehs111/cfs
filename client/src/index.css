@@ -391,3 +391,13 @@ main {
 .discuss-over-photo .role-option-detail {
   color: rgba(236, 228, 215, 0.85);
 }
+
+/* ---------------------------------------------------------------- About photo (Nov 2026)
+   Colour treatment for the About page background photo (AboutPage.jsx).
+   --about-photo-filter adjusts the photo; --about-photo-tint is laid over it
+   with "multiply" (a colour wash; transparent = none). The ivory fade on top
+   keeps the text side clean. */
+:root {
+  --about-photo-filter: saturate(0.45) sepia(0.15) contrast(0.95);
+  --about-photo-tint: rgba(117, 111, 106, 0.35); /* warm stone #756F6A */
+}

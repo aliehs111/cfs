@@ -8,10 +8,10 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - ~~§4 Email alerts + Admin → Notifications tab~~ ✅ done (weekly digest scheduling postponed)
 - ~~§1 User accounts, roles, Users tab, comments~~ ✅ done
 - ~~§12 Logging + Admin → Logs tab~~ ✅ done
-- ~~§5 Spam protection on forms~~ ✅ done (needs real Turnstile keys on Railway)
+- ~~§5 Spam protection on forms~~ ✅ done (Turnstile keys live on Railway)
 - ~~§11 `/discuss` prompt aligned with the chatbot knowledge base~~ ✅ done
 - §18 Thorough review of the AI context, so the bots never say something Cavalier wouldn't
-- §6 Production hosting setup (US region, Supabase plan, backups)
+- §6 Production hosting setup *(US region ✅ moved Nov 7; still: confirm `ENV=production`, Supabase plan, backups)*
 - §7 Account ownership, billing and costs *(a decision, not code)*
 - ~~§8 Mobile navigation menu~~ ✅ done
 - ~~§10 Admin → Projects tab with photo upload~~ ✅ done
@@ -29,6 +29,38 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - §2 Share posts to Instagram/LinkedIn
 - §15 Update the Anthropic SDK and models
 - ~~§19 Fix existing lint errors~~ ✅ done
+
+**Options considered, not scheduled:** §21 run as one Railway service; weekly digest scheduling (§4).
+
+---
+
+## Session log — Nov 7 2026
+
+**Fixed in production**
+- In the Field login failing: `FIELD_PASSWORD` missing locally (server not restarted after editing `.env`), and `FRONTEND_URL` on cfs-server pointing at an old client URL (CORS blocked every API call from the live site).
+- Turnstile "not a bot" failure: the secret key had been put in both services; site key/secret corrected and the secret rotated.
+- Railway region found on Southeast Asia again; both services moved to US East.
+
+**Built**
+- §4 Email alerts via Gmail SMTP: 8 alert types, Admin → Notifications (per-alert recipients, on/off, send test), throttling, `/discuss` conversations saved even when unfinished (emailed after 10 min idle), weekly digest built but not scheduled.
+- §1 User accounts (EventOps pattern, bearer token): `/login`, forced password change, roles `dev_admin` / `admin` / `poster` / `user`, Admin → Users, both shared passwords retired, In the Field on accounts, public comments + replies, edit/delete rules (admins anything, everyone their own), "Edit this project" link for admins.
+- **My email alerts** page (`/my-alerts`): each admin picks their own alerts.
+- §12 Logging everywhere + Admin → Logs tab (filters, summary cards, dev-only technical details); daily 90-day log cleanup.
+- §5 Spam protection: Turnstile on contact + every `/discuss` turn, content checks, `/discuss` rate limit.
+- §10 Admin → Projects tab with photo upload; sample projects given placeholder photos + a fourth office sample.
+- §8 Mobile menu; §9 privacy page (approved); §13 kept DM Sans; §16 accessibility pass (0 axe violations, screen-reader review); §19 lint clean.
+- In the Field Grid / Feed toggle.
+- Visual refinements (§22): homepage palette, About photo + copy, Contact form, In the Field graphite background, How can we help? rows + photo.
+
+**Specs added:** troubleshooting table (§1), §20 real-domain checklist, §21 single-service option, §22 visual refinements log.
+
+**Open items for next session**
+- Hide or delete the "test" project (Spider-Man photo) in Admin → Projects; tidy sample project descriptions or replace with real projects.
+- Privacy email address (`PRIVACY_EMAIL` in `PrivacyPage.jsx`).
+- Founder decisions: §18 AI context review, §7 account ownership/costs, flooring vocabulary for projects.
+- §6: confirm `ENV=production`, Supabase plan and backups.
+- Optional: In the Field gradient ends near-black while the footer is charcoal (could end at charcoal); About page min-height on very tall screens; a quick VoiceOver listen on an iPhone.
+- Don't commit the large original PNGs in `client/assets` (and `temp_proj_photos/`) unless wanted; the site uses only the `.jpg` copies.
 
 ---
 
@@ -483,7 +515,7 @@ Have the founder review it. If they have a lawyer, it's worth a quick look, but 
 
 ## 10. Admin → Projects tab with photo upload
 
-**Status:** ✅ Built and tested locally Nov 7 2026 (`server/routes/admin_projects.py`, `client/src/pages/AdminProjects.jsx`, shared upload helpers in `client/src/lib/upload.js`, bucket `project-images`). Project type uses the gallery's 5 filter types; **flooring is free text with suggestions** from `knowledge_base.md` until the founder approves a fixed list. **Remaining:** replace the 3 sample projects with real ones (delete them from the Projects tab); the prerender rebuild hook below applies only once §3 prerendering exists.
+**Status:** ✅ Built and tested locally Nov 7 2026 (`server/routes/admin_projects.py`, `client/src/pages/AdminProjects.jsx`, shared upload helpers in `client/src/lib/upload.js`, bucket `project-images`). Project type uses the gallery's 5 filter types; **flooring is free text with suggestions** from `knowledge_base.md` until the founder approves a fixed list. **Placeholder photos (Nov 7 2026):** the sample projects use the four photos from `client/assets/temp_proj_photos` (uploaded to `project-images`), and a fourth sample, "Sample Corporate Office Lounge", was added. **Remaining:** replace the 4 sample projects with real ones (delete them from the Projects tab); the prerender rebuild hook below applies only once §3 prerendering exists.
 
 **Build:**
 - A **Projects** tab in `/admin`: a list of all projects (including non-public), plus add/edit/delete.
@@ -788,7 +820,7 @@ Add a clear section to `knowledge_base.md`. Starting list for the founder to con
 Small, page-by-page refinements approved by the developer. Keep them unless deliberately revisited.
 
 - **Palette (homepage only so far):** `:root[data-palette="2026"]` in `client/src/index.css`, switched on per page by `NEW_PALETTE_PATHS` in `client/src/App.jsx`. Charcoal `#191716`, Warm Gray `#E8E1D7`, Ivory `#F7F3ED`, Stone `#756F6A`. **Maroon stays `#A8243A`** — the proposed `#722638` was tried and rejected (too hard to see on charcoal). Small maroon text on dark backgrounds uses `--maroon-text: #D9566B` everywhere.
-- **About:** photo wash lightened with an eased fade (solid where text overlaps); small labels darker; new copy (three paragraphs + "The details matter. Especially the ones you never see."); Sectors / What we install / Where we work removed.
+- **About:** background photo is now the library lobby (`client/assets/about_library.jpg`, web copy of "Modern Library Lobby with Geometric Carpet.png") with a **warm stone** treatment (`--about-photo-filter` / `--about-photo-tint` in `index.css`; warm monochrome and natural colour were previewed). Photo wash eased (solid where text overlaps); small labels darker; new copy (three paragraphs + "The details matter. Especially the ones you never see."); Sectors / What we install / Where we work removed.
 - **Contact (form, light theme only):** field underlines 48% charcoal (3:1), labels 75%, focus = maroon underline with a 1px maroon shadow (site focus ring skipped on those fields). The dark pop-up version is unchanged.
 - **In the Field (public feed):** graphite sheen background (Stone at top → near-black, soft top glow, fine grain) with all text white (`.field-stone`). Tried and replaced: Stone → charcoal; `#52504E` → black; brushed-metal and mica-sparkle textures were previewed, graphite sheen chosen.
 - **How can we help? (`/discuss`):**

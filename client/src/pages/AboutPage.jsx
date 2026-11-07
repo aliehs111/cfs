@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
-import subwayTile from '../../assets/subway_tile_column.jpg'
+// Background: web copy of "assets/Modern Library Lobby with Geometric Carpet.png".
+// Colour treatment is set by --about-photo-filter / --about-photo-tint in index.css.
+import libraryPhoto from '../../assets/about_library.jpg'
 
 export default function AboutPage() {
   return (
@@ -10,16 +12,18 @@ export default function AboutPage() {
       {/* Mobile: image strip at top, fades into cream below */}
       <div className="md:hidden relative" style={{ height: '320px' }}>
         <img
-          src={subwayTile}
+          src={libraryPhoto}
           alt=""
           aria-hidden="true"
           style={{
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            objectPosition: 'center',
+            objectPosition: '62% 50%',
+            filter: 'var(--about-photo-filter)',
           }}
         />
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--about-photo-tint)', mixBlendMode: 'multiply' }} />
         <div
           style={{
             position: 'absolute',
@@ -37,16 +41,18 @@ export default function AboutPage() {
         style={{ width: '55%', zIndex: 0 }}
       >
         <img
-          src={subwayTile}
+          src={libraryPhoto}
           alt=""
           aria-hidden="true"
           style={{
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            objectPosition: 'center',
+            objectPosition: '72% 55%',
+            filter: 'var(--about-photo-filter)',
           }}
         />
+        <div style={{ position: 'absolute', inset: 0, background: 'var(--about-photo-tint)', mixBlendMode: 'multiply' }} />
         <div
           style={{
             position: 'absolute',

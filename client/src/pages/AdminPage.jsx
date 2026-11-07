@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AdminLogs from './AdminLogs'
 import AdminNotifications from './AdminNotifications'
+import AdminProjects from './AdminProjects'
 import AdminUsers from './AdminUsers'
 import { apiFetch, getToken, homeFor, isAdmin, ROLE_LABELS as ACCOUNT_ROLES, setToken } from '../lib/auth'
 
 const TABS = {
   SUBMISSIONS: 'submissions',
   INTAKES: 'intakes',
+  PROJECTS: 'projects',
   USERS: 'users',
   NOTIFICATIONS: 'notifications',
   LOGS: 'logs',
@@ -148,6 +150,7 @@ export default function AdminPage() {
                 {Object.entries({
                   [TABS.SUBMISSIONS]: 'Submissions',
                   [TABS.INTAKES]: 'Project Intakes',
+                  [TABS.PROJECTS]: 'Projects',
                   [TABS.USERS]: 'Users',
                   [TABS.NOTIFICATIONS]: 'Notifications',
                   [TABS.LOGS]: 'Logs',
@@ -175,6 +178,7 @@ export default function AdminPage() {
               </nav>
             </div>
 
+            {tab === TABS.PROJECTS && <AdminProjects onUnauthorized={handleUnauthorized} />}
             {tab === TABS.USERS && <AdminUsers me={me} onUnauthorized={handleUnauthorized} />}
             {tab === TABS.LOGS && <AdminLogs me={me} onUnauthorized={handleUnauthorized} />}
 

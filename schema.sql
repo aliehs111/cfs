@@ -242,3 +242,12 @@ create table if not exists field_comments (
 );
 create index if not exists field_comments_post_idx on field_comments (post_id, created_at);
 alter table field_comments enable row level security;
+
+-- =========================================================
+-- ADMIN → PROJECTS photos (added Nov 2026, specs.md §10). Run on its own.
+-- Public bucket; uploads go through signed URLs issued to admins only.
+-- 10 MB per photo (the browser shrinks phone photos well below that).
+-- =========================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('project-images', 'project-images', true, 10485760, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;

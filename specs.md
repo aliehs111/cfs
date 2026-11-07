@@ -14,7 +14,7 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - §6 Production hosting setup (US region, Supabase plan, backups)
 - §7 Account ownership, billing and costs *(a decision, not code)*
 - ~~§8 Mobile navigation menu~~ ✅ done
-- §10 Admin → Projects tab with photo upload
+- ~~§10 Admin → Projects tab with photo upload~~ ✅ done
 - §9 Privacy policy page
 - §13 Heading font fix *(decision + small change)*
 - §16 Accessibility pass
@@ -479,7 +479,7 @@ Have the founder review it. If they have a lawyer, it's worth a quick look, but 
 
 ## 10. Admin → Projects tab with photo upload
 
-**Status:** Not started. From the original brief (steps 9–10). Without it, every gallery project has to be entered by hand in the Supabase table editor.
+**Status:** ✅ Built and tested locally Nov 7 2026 (`server/routes/admin_projects.py`, `client/src/pages/AdminProjects.jsx`, shared upload helpers in `client/src/lib/upload.js`, bucket `project-images`). Project type uses the gallery's 5 filter types; **flooring is free text with suggestions** from `knowledge_base.md` until the founder approves a fixed list. **Remaining:** replace the 3 sample projects with real ones (delete them from the Projects tab); the prerender rebuild hook below applies only once §3 prerendering exists.
 
 **Build:**
 - A **Projects** tab in `/admin`: a list of all projects (including non-public), plus add/edit/delete.

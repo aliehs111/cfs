@@ -173,7 +173,7 @@ LOG_CATEGORIES = {
     "chat": ["chat."],
     "field": ["field_post.", "comment."],
     "accounts": ["auth.", "user."],
-    "admin": ["notifications."],
+    "admin": ["notifications.", "project."],
     "email": ["alert."],
     "protection": ["rate_limit.", "spam."],
     "errors": ["server."],

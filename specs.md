@@ -5,15 +5,15 @@ Features agreed on but not yet built. Each section is meant to be enough context
 ### Suggested order
 
 **Before launch: these risk losing leads or breaking the site**
-- §4 Email alerts + Admin → Notifications tab, with the §12 `log_event` helper *(do first)*
-- §1 User accounts and roles (replaces both shared passwords), Admin → Users tab, comments *(second)*
-- §12 Logging everywhere + Admin → Logs tab *(third)*
-- §5 Spam protection on forms *(build alongside §4)*
+- ~~§4 Email alerts + Admin → Notifications tab~~ ✅ done (weekly digest scheduling postponed)
+- ~~§1 User accounts, roles, Users tab, comments~~ ✅ done
+- ~~§12 Logging + Admin → Logs tab~~ ✅ done
+- ~~§5 Spam protection on forms~~ ✅ done (needs real Turnstile keys on Railway)
 - ~~§11 `/discuss` prompt aligned with the chatbot knowledge base~~ ✅ done
 - §18 Thorough review of the AI context, so the bots never say something Cavalier wouldn't
 - §6 Production hosting setup (US region, Supabase plan, backups)
 - §7 Account ownership, billing and costs *(a decision, not code)*
-- §8 Mobile navigation menu
+- ~~§8 Mobile navigation menu~~ ✅ done
 - §10 Admin → Projects tab with photo upload
 - §9 Privacy policy page
 - §13 Heading font fix *(decision + small change)*
@@ -21,6 +21,7 @@ Features agreed on but not yet built. Each section is meant to be enough context
 
 **At launch**
 - §3 SEO and moving the domain off Hibu
+- §20 Real domain checklist *(the technical tick-list for cutover day; one small code change beforehand)*
 - §14 Uptime and error monitoring
 - §17 Client handoff guide
 
@@ -262,12 +263,15 @@ The site is a React single-page app: pages are built in the browser by JavaScrip
 
 ### Part D: Cutover day
 
+**Use §20 (Real domain checklist) as the tick-list on the day.** The steps below are the overview.
+
 1. In Railway, add the custom domain to the **frontend** service (both `@` and `www`). Railway shows the DNS records to create.
    - Railway uses CNAME records. A CNAME on the bare domain (`@`) needs a DNS host that supports CNAME flattening / ALIAS (Cloudflare does; GoDaddy doesn't). Otherwise point `www` at Railway and forward the bare domain to `www`.
 2. **Recommended:** put the backend on a subdomain, e.g. `api.<domain>`. Frontend and API are then on the same site, so the admin and staff login cookies stop being cross-site, which is simpler and more reliable on iPhones.
 3. Update environment variables:
    - server: `FRONTEND_URL=https://www.<domain>` (CORS)
    - client: `VITE_API_URL=https://api.<domain>` (then redeploy, because it's baked in at build)
+   - Cloudflare → Turnstile → the Cavalier widget → add `<domain>` and `www.<domain>` to its hostnames (same keys; no code change). Without this, the contact form and `/discuss` reject everyone on the new domain. Remove the `up.railway.app` hostname once it's no longer used.
 4. Change **only** the website DNS records. Leave MX/SPF/DKIM/DMARC/TXT exactly as recorded in Part A.
 5. Wait for HTTPS certificates to issue on Railway, then test: home page, deep links (refresh on a project page), every form, chat, admin login, In the Field posting, the redirects, and **send and receive a test email** on the domain.
 6. **Google Search Console:** verify the domain (DNS TXT record), submit the new sitemap, and use URL Inspection → "Request indexing" on the main pages.
@@ -295,7 +299,10 @@ The site is a React single-page app: pages are built in the browser by JavaScrip
 
 ## 4. Email alerts and the Admin → Notifications tab
 
-**Status:** ✅ Built and tested locally, Nov 7 2026 (Gmail SMTP, all 8 alerts, Notifications tab, weekly digest script, intake saving incl. unfinished conversations). **Remaining:** deploy; create the Railway cron service for `weekly_digest.py` (see that file's docstring); `user_changes` starts firing when §1 ships; deleted-post alerts name the person once §1 ships.
+**Status:** ✅ Built and tested locally, Nov 7 2026 (Gmail SMTP, all 8 alerts, Notifications tab, weekly digest script, intake saving incl. unfinished conversations). Deployed and tested in production Nov 7 2026 (§1 also shipped, so `user_changes` alerts and deleted-post names work). **Weekly digest: built but not scheduled — postponed, may not be added.** The digest content works (Admin → Notifications → Weekly digest → Send test sends a real one), but nothing sends it automatically. If wanted later, two options:
+- **A. Railway cron service:** new service from the same repo, root `server`, start command `python weekly_digest.py`, schedule `0 12 * * 1` (Mon 7am EST / 8am EDT), same variables as cfs-server. Extra service and duplicated variables.
+- **B. In-process (recommended):** a background loop in the existing server, like the intake sweeper in `intake_store.py`: on Mondays after 8am ET, if no `weekly_digest` `alert.sent` log exists since Monday 00:00 ET, claim the week and send. Nothing to set up in Railway; a restart at 8am just delays it a few minutes.
+- Either way, the 90-day log cleanup in `weekly_digest.py` also only runs when the digest runs; with neither, logs grow until cleaned up some other way.
 
 ### Goal
 
@@ -385,7 +392,11 @@ Table: `notification_settings` — `alert_type` (primary key), `enabled` bool, `
 
 ## 5. Spam protection on public forms
 
-**Status:** Partly done (Nov 2026). Items 1 and 2 are built: the contact form has a hidden honeypot field (`cf_extra`) and a 5/hour, 20/day per-IP limit. `server/limiter.py` now keys on the visitor's real IP from Railway's proxy headers (`X-Real-IP`, else the last `X-Forwarded-For` entry). That also fixes the chat and intake limits, which previously may have been shared by all visitors. **Remaining:** items 3–4 (Turnstile, content checks), and a friendlier message on the contact form when someone hits the limit (it currently shows the generic error). Build the rest together with section 4.
+**Status:** ✅ Built and tested locally Nov 7 2026. Contact form: honeypot, 5/hour + 20/day per IP, Cloudflare Turnstile, and content checks (no links in the name; reject link-only messages or more than 5 links; 8,000-character cap), with specific error messages instead of the generic one. `/discuss`: Turnstile on **every** turn (each turn calls Claude), a new 20/hour + 60/day per-IP limit (it had none), and max 5 messages / 4,000 characters each. Server: `server/turnstile.py`; client: `client/src/lib/turnstile.js` (invisible unless Cloudflare wants a click). If Cloudflare itself is unreachable, requests are allowed and logged (`spam.check_unavailable`) rather than losing a lead. Rejections are logged as `spam.rejected` (Logs tab → Spam and rate limits).
+**Keys:** client `VITE_TURNSTILE_SITE_KEY` (build-time: redeploy the frontend after setting), server `TURNSTILE_SECRET_KEY`. Without the secret, checks are skipped and a warning is logged once. Local testing can use Cloudflare's test keys (see the top of `turnstile.py`).
+**Not covered:** the chat widget (`/api/chat`, 30/day per IP) — add Turnstile there too if bots start costing money.
+
+**Original plan:**
 
 **Current state:** `/api/contact` has no rate limit and no bot check. `/api/project-intake` and `/api/chat` are rate-limited (slowapi) but have no bot check, and every intake/chat request costs Anthropic API money.
 
@@ -439,7 +450,7 @@ Recommendations:
 
 ## 8. Mobile navigation menu
 
-**Status:** Not started. **Before launch.**
+**Status:** ✅ Built Nov 7 2026 (`client/src/components/Nav.jsx`). Menu button below 1024px (six links need ~800px in a row, so tablets get it too); checked at 375px: no horizontal overflow on any page; closes on link tap, Escape, outside tap and back button; scroll locked while open; focus moves in and returns to the button.
 
 The navbar has six links (Home, Projects, In the Field, How can we help?, About, Contact) in a single row with no mobile layout. On phones they crowd or overflow.
 
@@ -698,3 +709,70 @@ Add a clear section to `knowledge_base.md`. Starting list for the founder to con
 - `useVersionCheck.js`: `__APP_VERSION__` is flagged as undefined. Declare it as a global in `eslint.config.js` (it's injected by Vite's `define`).
 
 **Done when:** `npx eslint src` reports no problems, and the contact modal, lead-context hand-off from `/discuss`, project detail pages, and admin tabs still work.
+
+---
+
+## 20. Real domain checklist (moving off the Railway address)
+
+**Status:** Waiting on the domain move (§3). Everything that has to change when the site moves from `cavalier-flooring-production-889e.up.railway.app` to Cavalier's own domain, in one place. §3 covers the SEO, DNS-discovery and Hibu side in more detail; this is the technical checklist to tick through on the day. Replace `<domain>` with the real one.
+
+### Before cutover day
+- [ ] **Code: let the server accept more than one site address.** Today `server/main.py` allows only one `FRONTEND_URL` (plus localhost). Change it to accept a comma-separated list, so the old Railway address and the new domain both work during the switch instead of the old one breaking the moment the variable changes.
+- [ ] Decide the canonical address: `https://www.<domain>` or `https://<domain>` (§3 Part B item 6).
+- [ ] Confirm who controls DNS and that you can log in (§3 Part A).
+- [ ] Record the existing email DNS records (MX, SPF, DKIM, DMARC, TXT) so they can be left exactly as they are (§3 Part A).
+
+### Railway
+- [ ] **cavalier-flooring** (frontend) → Settings → Networking → Custom Domain: add `<domain>` and `www.<domain>`; create the DNS records Railway shows.
+- [ ] **cfs-server** → Custom Domain: add `api.<domain>` (recommended: keeps the API on the same site as the pages).
+- [ ] Wait until Railway shows HTTPS certificates issued for all of them.
+- [ ] While there, check both services are still in **US East (Virginia)**. The region has reverted to Southeast Asia before.
+
+### Variables (each needs a Deploy to take effect)
+- [ ] **cfs-server** `FRONTEND_URL` → `https://www.<domain>` (exact: `https://`, no trailing slash; with the list change above, `https://www.<domain>,https://cavalier-flooring-production-889e.up.railway.app` during the switch). It controls which site may call the API **and** the links inside alert emails.
+- [ ] **cavalier-flooring** `VITE_API_URL` → `https://api.<domain>`, then **redeploy the frontend** (it's built into the page).
+
+### Cloudflare Turnstile (§5)
+- [ ] Cloudflare → Turnstile → the Cavalier widget → **add `<domain>` and `www.<domain>` to its hostnames**. Same keys, no code change. **If this is missed, the contact form and `/discuss` reject every visitor on the new domain.**
+- [ ] Later, once nothing uses the Railway address, remove `cavalier-flooring-production-889e.up.railway.app` from the widget.
+
+### DNS
+- [ ] Change **only** the website records. Leave MX/SPF/DKIM/DMARC/TXT exactly as recorded.
+
+### Site content (§3)
+- [ ] `client/public/robots.txt`: add `Sitemap: https://www.<domain>/sitemap.xml`.
+- [ ] Sitemap and canonical tags in place (§3 Part B).
+- [ ] 301 redirects from the old Hibu URLs (§3 Part C).
+
+### Tell the team
+- [ ] Everyone has to **sign in again** on the new address (sign-ins are stored per address), and password managers will need the login saved for the new domain. Send staff the new sign-in link: `https://www.<domain>/login`.
+- [ ] Invite emails and texts from Admin → Users use whatever address the admin is on, so nothing to change there; just make sure admins use the new address.
+
+### Test on the new domain
+- [ ] Home page, and a deep link refreshed directly (e.g. a project page).
+- [ ] Contact form (and that the alert email arrives, and its "Open the admin page" link goes to the new domain).
+- [ ] `/discuss` conversation, chat widget.
+- [ ] `/login`, admin page, Users tab, Logs tab.
+- [ ] In the Field: post, comment, delete.
+- [ ] Admin → Notifications → Send test.
+- [ ] Old Hibu URLs redirect.
+- [ ] Company email still sends and receives.
+
+### After
+- [ ] Google Search Console, Google Business Profile and directory listings (§3 Part D steps 6–7).
+- [ ] Only then cancel Hibu (§3 Part D step 8).
+- [ ] Optional: switch sign-in from the `Authorization` header to a cookie now that site and API share a domain (§1). Not required; the header works everywhere.
+
+---
+
+## 21. Option: run the site as one Railway service instead of two
+
+**Status:** Considered Nov 7 2026, not scheduled. Best done **before** the domain move (§20) if at all.
+
+**Idea:** one service runs FastAPI, which also serves the built React pages; pages and `/api` share one address.
+
+**Why:** removes the cross-site problems hit in Nov 2026 (`FRONTEND_URL` mismatch broke every form; Safari cross-site cookies), makes `FRONTEND_URL`/`VITE_API_URL`/CORS irrelevant in production, halves the §20 checklist (one custom domain, no `api.` subdomain, no multi-origin code change, one Turnstile hostname), one region setting and one set of logs, likely a slightly smaller Railway bill. The client already calls `/api/...` relative to the page when `VITE_API_URL` is empty.
+
+**Costs:** every deploy rebuilds both halves (1–2 min; Railway keeps the old version up until the new one is healthy); a `Dockerfile` (Node build stage → Python image) to maintain; FastAPI must reproduce `client/serve.json`'s caching (`index.html` never cached so the update banner works; hashed assets cached long-term) and the SPA fallback so refreshing a deep link works.
+
+**Plan if done:** build and test locally as one service → add a third Railway service from the same repo using the Dockerfile, copy variables → test on its Railway address while the current two keep serving → retire the old two.

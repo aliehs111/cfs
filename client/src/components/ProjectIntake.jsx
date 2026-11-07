@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ContactModal from './ContactModal'
+import { BOT_CHECK_FAILED, useTurnstile } from '../lib/turnstile'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -32,6 +33,7 @@ export default function ProjectIntake() {
   const [error, setError] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
   const [conversationId, setConversationId] = useState(null)
+  const { containerRef: botCheckRef, getToken } = useTurnstile()
 
   const handleStart = (chosenRole) => {
     setRole(chosenRole)
@@ -44,17 +46,25 @@ export default function ProjectIntake() {
     setState(STATES.LOADING)
 
     try {
+      let turnstileToken = null
+      try {
+        turnstileToken = await getToken()
+      } catch {
+        throw new Error('bot_check')
+      }
       const res = await fetch(`${API_BASE}/api/project-intake`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newMessages,
           role,
+          turnstile_token: turnstileToken,
           ...(convId ? { conversation_id: convId } : {}),
         }),
       })
 
       if (res.status === 429) throw new Error('rate_limit')
+      if (res.status === 400) throw new Error('bot_check')
       if (!res.ok) throw new Error('unknown')
 
       const reader = res.body.getReader()
@@ -104,7 +114,9 @@ export default function ProjectIntake() {
         setState(STATES.RESULT)
       }
     } catch (e) {
-      if (e.message === 'rate_limit') {
+      if (e.message === 'bot_check') {
+        setError(BOT_CHECK_FAILED)
+      } else if (e.message === 'rate_limit') {
         setError(
           "You've reached today's limit. Please come back tomorrow or contact us directly."
         )
@@ -219,6 +231,8 @@ export default function ProjectIntake() {
   return (
     <section className="pt-16 pb-24 px-6 md:px-14 w-full">
       <div className="max-w-3xl mx-auto">
+        {/* Bot check: invisible unless Cloudflare asks this visitor to tick a box. */}
+        <div ref={botCheckRef} className="mb-4" />
         <p
           className="uppercase mb-6"
           style={{

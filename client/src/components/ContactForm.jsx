@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { BOT_CHECK_FAILED, useTurnstile } from '../lib/turnstile'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -29,18 +30,19 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     message: '',
   })
   const [status, setStatus] = useState('idle')
+  const [errorMessage, setErrorMessage] = useState('')
+  const { containerRef: botCheckRef, getToken } = useTurnstile()
   // Spam trap: hidden from people, but bots fill in every field.
   const [trap, setTrap] = useState('')
-  const [leadContext, setLeadContext] = useState(null)
-
-  useEffect(() => {
+  // Set by the project-intake tool so its exchange is attached to the message.
+  const [leadContext] = useState(() => {
     try {
       const raw = sessionStorage.getItem('cavalier_lead_context')
-      if (raw) setLeadContext(JSON.parse(raw))
+      return raw ? JSON.parse(raw) : null
     } catch {
-      // ignore parse errors
+      return null
     }
-  }, [])
+  })
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -48,18 +50,38 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     e.preventDefault()
     if (!form.name || !form.email) return
     setStatus('submitting')
+    setErrorMessage('')
     try {
+      let turnstileToken = null
+      try {
+        turnstileToken = await getToken()
+      } catch {
+        throw new Error(BOT_CHECK_FAILED)
+      }
       const messageWithContext = (form.message || '') + formatLeadContext(leadContext)
       const res = await fetch(`${API_BASE}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, message: messageWithContext, cf_extra: trap }),
+        body: JSON.stringify({ ...form, message: messageWithContext, cf_extra: trap, turnstile_token: turnstileToken }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (res.status === 429) {
+        throw new Error("You've sent several messages already. Please wait a while, or give us a call.")
+      }
+      if (res.status === 400) {
+        let detail = ''
+        try {
+          detail = (await res.json()).detail
+        } catch {
+          /* not JSON */
+        }
+        throw new Error(typeof detail === 'string' && detail ? detail : 'Please check the form and try again.')
+      }
+      if (!res.ok) throw new Error('Something went wrong. Please try again.')
       sessionStorage.removeItem('cavalier_lead_context')
       setStatus('success')
       onSuccess?.()
-    } catch {
+    } catch (err) {
+      setErrorMessage(err.message === 'Failed to fetch' ? 'Could not reach the server. Check your connection and try again.' : err.message)
       setStatus('error')
     }
   }
@@ -225,9 +247,12 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
 
       {status === 'error' && (
         <p className="font-body text-xs" style={{ color: 'var(--maroon)' }}>
-          Something went wrong. Please try again.
+          {errorMessage || 'Something went wrong. Please try again.'}
         </p>
       )}
+
+      {/* Bot check: invisible unless Cloudflare asks this visitor to tick a box. */}
+      <div ref={botCheckRef} />
 
       <button
         type="submit"

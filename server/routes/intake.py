@@ -4,11 +4,13 @@ import traceback
 from typing import Literal, Optional
 from uuid import UUID
 import anthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from logger import log_event
 from intake_store import save_turn
+from limiter import client_ip, limiter
+from turnstile import require_human
 from notify import report_server_error
 from supabase_client import get_supabase
 
@@ -111,10 +113,14 @@ class IntakePayload(BaseModel):
     role: Optional[Literal["owner", "specifier"]] = None
     # Sent by the page so every turn updates one saved conversation.
     conversation_id: Optional[UUID] = None
+    # Cloudflare Turnstile token, fresh for every turn (each one calls Claude).
+    turnstile_token: Optional[str] = None
 
 
 @router.post("/project-intake")
-async def project_intake(payload: IntakePayload):
+# A full conversation is at most 3 requests; this allows ~6 an hour per visitor.
+@limiter.limit("20/hour;60/day")
+async def project_intake(request: Request, payload: IntakePayload):
     if not payload.messages:
         raise HTTPException(status_code=400, detail="Please describe your project.")
 
@@ -123,6 +129,10 @@ async def project_intake(payload: IntakePayload):
     ).strip()
     if len(first_user_msg) < 10:
         raise HTTPException(status_code=400, detail="Please describe your project.")
+
+    if len(payload.messages) > 5 or any(len(m.content) > 4000 for m in payload.messages):
+        raise HTTPException(status_code=400, detail="That's longer than this tool can take. Please use the contact form.")
+    await require_human(payload.turnstile_token, client_ip(request), "/api/project-intake")
 
     n = len(payload.messages)
     if n >= 5:

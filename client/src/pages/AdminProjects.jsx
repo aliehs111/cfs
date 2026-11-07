@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { apiFetch, readError } from '../lib/auth'
 import { fileType, prepareImage, putWithProgress } from '../lib/upload'
 
-const muted = 'rgba(236,228,215,0.4)'
+const muted = 'rgba(236,228,215,0.55)'
 const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
 const MAX_PHOTOS = 10
@@ -94,7 +94,7 @@ export default function AdminProjects({ onUnauthorized }) {
     }
   }, [onUnauthorized])
 
-  if (error) return <p className="font-body text-xs" style={{ color: 'var(--maroon)' }}>{error}</p>
+  if (error) return <p className="font-body text-xs" style={{ color: 'var(--maroon-text)' }}>{error}</p>
   if (!data) return <p className="font-body text-xs" style={{ color: muted }}>Loading...</p>
 
   if (editing) {
@@ -159,7 +159,7 @@ export default function AdminProjects({ onUnauthorized }) {
           </div>
           <span
             className="font-body text-xs uppercase shrink-0"
-            style={{ letterSpacing: '0.12em', color: p.is_public ? soft : 'var(--maroon)' }}
+            style={{ letterSpacing: '0.12em', color: p.is_public ? soft : 'var(--maroon-text)' }}
           >
             {p.is_public ? 'Public' : 'Hidden'}
           </span>
@@ -355,7 +355,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
             />
           </div>
           {project && form.slug !== project.slug && (
-            <p className="font-body text-xs mt-1" style={{ color: 'var(--maroon)' }}>
+            <p className="font-body text-xs mt-1" style={{ color: 'var(--maroon-text)' }}>
               Changing this breaks any links already shared to the old address.
             </p>
           )}
@@ -481,7 +481,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
       </label>
 
       {error && (
-        <p className="font-body text-xs mt-6" role="alert" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mt-6" role="alert" style={{ color: 'var(--maroon-text)' }}>
           {error}
         </p>
       )}
@@ -494,7 +494,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
           Cancel
         </button>
         {project && (
-          <button type="button" onClick={destroy} disabled={busy} className="font-body text-xs font-medium tracking-widest uppercase hover:opacity-50 ml-auto" style={{ ...action, color: 'var(--maroon)' }}>
+          <button type="button" onClick={destroy} disabled={busy} className="font-body text-xs font-medium tracking-widest uppercase hover:opacity-50 ml-auto" style={{ ...action, color: 'var(--maroon-text)' }}>
             Delete project
           </button>
         )}

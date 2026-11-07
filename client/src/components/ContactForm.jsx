@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { BOT_CHECK_FAILED, useTurnstile } from '../lib/turnstile'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -30,6 +30,9 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     message: '',
   })
   const [status, setStatus] = useState('idle')
+  // Unique per form: the page and the pop-up can both be on screen.
+  const uid = useId()
+  const fid = (name) => `${uid}-${name}`
   const [errorMessage, setErrorMessage] = useState('')
   const { containerRef: botCheckRef, getToken } = useTurnstile()
   // Spam trap: hidden from people, but bots fill in every field.
@@ -86,13 +89,13 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     }
   }
 
-  const labelColor = isDark ? 'rgba(236,228,215,0.5)' : 'rgba(26,24,22,0.5)'
+  const labelColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.6)'
   const fieldColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
   const fieldUnderline = isDark ? 'rgba(236,228,215,0.15)' : 'rgba(26,24,22,0.15)'
   const fieldUnderlineFocus = isDark ? 'var(--off-white)' : 'var(--charcoal)'
   const successHeadingColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
   const successBodyColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.65)'
-  const indicatorColor = isDark ? 'rgba(236,228,215,0.45)' : 'rgba(26,24,22,0.5)'
+  const indicatorColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.6)'
   const buttonColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
   const buttonBorder = isDark ? 'var(--off-white)' : 'var(--charcoal)'
 
@@ -125,7 +128,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
 
   if (status === 'success') {
     return (
-      <div className="pt-4">
+      <div className="pt-4" role="status">
         <p
           className="font-display mb-4"
           style={{ color: successHeadingColor, fontSize: '32px', fontWeight: 500 }}
@@ -170,10 +173,12 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
         <div>
-          <label style={labelStyle}>Name *</label>
+          <label htmlFor={fid('name')} style={labelStyle}>Name *</label>
           <input
             type="text"
             name="name"
+            id={fid('name')}
+            autoComplete="name"
             required
             value={form.name}
             onChange={handleChange}
@@ -183,10 +188,12 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
           />
         </div>
         <div>
-          <label style={labelStyle}>Company</label>
+          <label htmlFor={fid('company')} style={labelStyle}>Company</label>
           <input
             type="text"
             name="company"
+            id={fid('company')}
+            autoComplete="organization"
             value={form.company}
             onChange={handleChange}
             style={fieldStyle}
@@ -197,10 +204,12 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       </div>
 
       <div>
-        <label style={labelStyle}>Email *</label>
+        <label htmlFor={fid('email')} style={labelStyle}>Email *</label>
         <input
           type="email"
           name="email"
+          id={fid('email')}
+          autoComplete="email"
           required
           value={form.email}
           onChange={handleChange}
@@ -211,10 +220,12 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       </div>
 
       <div>
-        <label style={labelStyle}>Phone (Optional — in case our email lands in your spam)</label>
+        <label htmlFor={fid('phone')} style={labelStyle}>Phone (Optional — in case our email lands in your spam)</label>
         <input
           type="tel"
           name="phone"
+          id={fid('phone')}
+          autoComplete="tel"
           value={form.phone}
           onChange={handleChange}
           style={fieldStyle}
@@ -224,9 +235,10 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       </div>
 
       <div>
-        <label style={labelStyle}>What can we help with? (Optional)</label>
+        <label htmlFor={fid('message')} style={labelStyle}>What can we help with? (Optional)</label>
         <textarea
           name="message"
+          id={fid('message')}
           rows={4}
           value={form.message}
           onChange={handleChange}
@@ -246,7 +258,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       )}
 
       {status === 'error' && (
-        <p className="font-body text-xs" style={{ color: 'var(--maroon)' }}>
+        <p role="alert" className="font-body text-xs" style={{ color: isDark ? 'var(--maroon-text)' : 'var(--maroon)' }}>
           {errorMessage || 'Something went wrong. Please try again.'}
         </p>
       )}

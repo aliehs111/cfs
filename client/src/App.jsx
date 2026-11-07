@@ -14,6 +14,7 @@ import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
 import LoginPage from './pages/LoginPage'
+import PrivacyPage from './pages/PrivacyPage'
 import FieldPage from './pages/FieldPage'
 import FieldPostPage from './pages/FieldPostPage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -58,10 +59,13 @@ function ChatGate() {
 export default function App() {
   return (
     <BrowserRouter>
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       <UpdateBanner />
       <PageTracker />
       <Nav />
-      <main>
+      <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<ProjectsPage />} />
@@ -71,6 +75,7 @@ export default function App() {
           <Route path="/in-the-field" element={<FieldPage />} />
           <Route path="/in-the-field/post" element={<FieldPostPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<NotFoundPage />} />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { apiFetch, getToken, homeFor, readError, setToken } from '../lib/auth'
 
-const muted = 'rgba(236,228,215,0.4)'
+const muted = 'rgba(236,228,215,0.55)'
 
 const inputStyle = {
   width: '100%',
@@ -162,7 +162,7 @@ function SignInForm({ onSignedIn }) {
         style={{ ...inputStyle, marginTop: '8px' }}
       />
       {error && (
-        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon-text)' }}>
           {error}
         </p>
       )}
@@ -252,7 +252,7 @@ export function ChangePasswordForm({ user, firstTime, onDone, onCancel }) {
         style={{ ...inputStyle, marginTop: '8px' }}
       />
       {error && (
-        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon-text)' }}>
           {error}
         </p>
       )}

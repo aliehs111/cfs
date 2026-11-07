@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, readError } from '../lib/auth'
 
-const muted = 'rgba(236,228,215,0.4)'
+const muted = 'rgba(236,228,215,0.55)'
 const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
 
@@ -41,7 +41,7 @@ export default function AdminNotifications({ onUnauthorized }) {
 
   if (error) {
     return (
-      <p className="font-body text-xs" style={{ color: 'var(--maroon)' }}>
+      <p className="font-body text-xs" style={{ color: 'var(--maroon-text)' }}>
         {error}
       </p>
     )
@@ -68,7 +68,7 @@ export default function AdminNotifications({ onUnauthorized }) {
       </p>
 
       {!data.email_configured && (
-        <p className="font-body text-xs mb-8" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mb-8" style={{ color: 'var(--maroon-text)' }}>
           Email isn&apos;t set up on the server yet (SMTP_USER and SMTP_PASS), so no alerts will be sent.
         </p>
       )}
@@ -154,7 +154,7 @@ function AlertRow({ alert, onSaved, onUnauthorized }) {
               role="switch"
               aria-checked={alert.enabled}
               className="font-body text-xs font-medium tracking-widest uppercase"
-              style={{ ...labelStyle, color: alert.enabled ? 'var(--off-white)' : 'var(--maroon)' }}
+              style={{ ...labelStyle, color: alert.enabled ? 'var(--off-white)' : 'var(--maroon-text)' }}
             >
               {alert.enabled ? '● On' : '○ Off'}
             </button>
@@ -235,7 +235,7 @@ function AlertRow({ alert, onSaved, onUnauthorized }) {
             <p
               className="font-body text-xs mt-3"
               role="status"
-              style={{ color: status.kind === 'ok' ? soft : 'var(--maroon)' }}
+              style={{ color: status.kind === 'ok' ? soft : 'var(--maroon-text)' }}
             >
               {status.text}
             </p>

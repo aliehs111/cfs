@@ -4,6 +4,7 @@ const FOOTER_LINKS = [
   { label: 'Projects', to: '/projects' },
   { label: 'About', to: '/about' },
   { label: 'Contact', to: '/contact' },
+  { label: 'Privacy', to: '/privacy' },
 ]
 
 export default function Footer() {
@@ -91,7 +92,7 @@ export default function Footer() {
           <p
             style={{
               color: 'var(--off-white)',
-              opacity: 0.3,
+              opacity: 0.55,
               fontSize: '0.75rem',
               letterSpacing: '0.05em',
               margin: 0,

@@ -62,7 +62,7 @@ export default function ContactModal({ isOpen, onClose }) {
             right: '16px',
             background: 'none',
             border: 'none',
-            color: 'rgba(236,228,215,0.4)',
+            color: 'rgba(236,228,215,0.55)',
             cursor: 'pointer',
             padding: '8px',
             fontSize: '22px',

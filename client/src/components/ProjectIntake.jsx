@@ -236,10 +236,10 @@ export default function ProjectIntake() {
         <p
           className="uppercase mb-6"
           style={{
-            color: 'var(--maroon)',
+            color: 'var(--maroon-text)',
             letterSpacing: '0.16em',
             fontSize: '0.7rem',
-            opacity: 0.85,
+            opacity: 1,
           }}
         >
           How can we help?
@@ -281,7 +281,7 @@ export default function ProjectIntake() {
               className="text-xs uppercase mb-5"
               style={{
                 color: 'var(--off-white)',
-                opacity: 0.4,
+                opacity: 0.55,
                 letterSpacing: '0.16em',
                 fontSize: '0.7rem',
               }}
@@ -296,7 +296,7 @@ export default function ProjectIntake() {
                 style={roleButtonStyle}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--maroon)'
-                  e.currentTarget.style.color = 'var(--maroon)'
+                  e.currentTarget.style.color = 'var(--maroon-text)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'rgba(236,228,215,0.18)'
@@ -323,7 +323,7 @@ export default function ProjectIntake() {
                 style={roleButtonStyle}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--maroon)'
-                  e.currentTarget.style.color = 'var(--maroon)'
+                  e.currentTarget.style.color = 'var(--maroon-text)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'rgba(236,228,215,0.18)'
@@ -353,7 +353,7 @@ export default function ProjectIntake() {
               className="mb-10"
               style={{
                 color: 'var(--off-white)',
-                opacity: 0.45,
+                opacity: 0.55,
                 fontSize: '13px',
                 lineHeight: 1.8,
                 fontWeight: 300,
@@ -378,7 +378,7 @@ export default function ProjectIntake() {
             {error && (
               <p
                 className="text-xs mt-4"
-                style={{ color: 'var(--maroon)', opacity: 0.9 }}
+                style={{ color: 'var(--maroon-text)', opacity: 0.9 }}
               >
                 {error}
               </p>
@@ -387,7 +387,7 @@ export default function ProjectIntake() {
             <div className="flex justify-between items-center mt-8">
               <span
                 className="text-xs"
-                style={{ color: 'var(--off-white)', opacity: 0.3, letterSpacing: '0.06em' }}
+                style={{ color: 'var(--off-white)', opacity: 0.55, letterSpacing: '0.06em' }}
               >
                 {currentInput.trim().length > 0
                   ? `${currentInput.trim().split(/\s+/).length} words`
@@ -409,7 +409,7 @@ export default function ProjectIntake() {
           <div className="py-8">
             <p
               className="text-xs font-medium tracking-widest uppercase mb-6"
-              style={{ color: 'var(--off-white)', opacity: 0.4, letterSpacing: '0.14em' }}
+              style={{ color: 'var(--off-white)', opacity: 0.55, letterSpacing: '0.14em' }}
             >
               Reading your project...
             </p>
@@ -434,7 +434,7 @@ export default function ProjectIntake() {
           <div>
             <p
               className="text-xs font-medium tracking-widest uppercase mb-10"
-              style={{ color: 'var(--off-white)', opacity: 0.4, letterSpacing: '0.14em' }}
+              style={{ color: 'var(--off-white)', opacity: 0.55, letterSpacing: '0.14em' }}
             >
               One question
             </p>
@@ -463,7 +463,7 @@ export default function ProjectIntake() {
             {error && (
               <p
                 className="text-xs mt-4"
-                style={{ color: 'var(--maroon)', opacity: 0.9 }}
+                style={{ color: 'var(--maroon-text)', opacity: 0.9 }}
               >
                 {error}
               </p>
@@ -486,7 +486,7 @@ export default function ProjectIntake() {
           <div>
             <p
               className="text-xs font-medium tracking-widest uppercase mb-10"
-              style={{ color: 'var(--off-white)', opacity: 0.4, letterSpacing: '0.14em' }}
+              style={{ color: 'var(--off-white)', opacity: 0.55, letterSpacing: '0.14em' }}
             >
               Cavalier's Read
             </p>
@@ -512,7 +512,7 @@ export default function ProjectIntake() {
                 }}
                 className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={{
-                  color: 'var(--maroon)',
+                  color: 'var(--maroon-text)',
                   letterSpacing: '0.14em',
                   background: 'transparent',
                   border: 'none',
@@ -530,7 +530,7 @@ export default function ProjectIntake() {
                 className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={{
                   color: 'var(--off-white)',
-                  opacity: 0.4,
+                  opacity: 0.55,
                   letterSpacing: '0.14em',
                   background: 'none',
                   border: 'none',

@@ -1,9 +1,20 @@
 @import "tailwindcss";
 
+/* Headings (font-display) and body text both use DM Sans. The brief's
+   Cormorant Garamond was never loaded; the sans look was kept (Nov 2026). */
+@theme {
+  --font-display: "DM Sans", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+}
+
 :root {
   --charcoal: #1A1816;
   --cream: #F9F5EF;
   --maroon: #A8243A;
+  /* Maroon for small text on the dark background: #A8243A is too faint there
+     (2.5:1). This passes the 4.5:1 accessibility standard. Lines, buttons and
+     maroon text on cream keep --maroon. */
+  --maroon-text: #D9566B;
   --black: #000000;
   --off-white: #ECE4D7;
   --white: #FFFFFF;
@@ -92,14 +103,14 @@ main {
   padding: 10px; /* comfortable tap target */
   margin: -10px;
   color: var(--off-white);
-  opacity: 0.3;
+  opacity: 0.5; /* icons need 3:1 contrast to be findable */
   transition: opacity 0.2s ease, color 0.2s ease;
 }
 
 .hard-hat-link:hover,
 .hard-hat-link:focus-visible {
   opacity: 1;
-  color: var(--maroon);
+  color: var(--maroon-text);
 }
 
 /* Filter chips */
@@ -118,13 +129,13 @@ main {
 
 .filter-chip:hover {
   border-color: var(--maroon);
-  color: var(--maroon);
+  color: var(--maroon-text);
   opacity: 1;
 }
 
 .filter-chip-active {
   border-color: var(--maroon);
-  color: var(--maroon);
+  color: var(--maroon-text);
   opacity: 1;
 }
 
@@ -170,9 +181,53 @@ main {
 }
 
 .project-card:hover .project-card-name {
-  color: var(--maroon);
+  color: var(--maroon-text);
 }
 
 .project-card-name {
   transition: color 0.25s ease;
+}
+
+/* ---------------------------------------------------------------- accessibility (specs.md §16) */
+
+/* A visible ring for keyboard users everywhere, including fields that hide
+   the browser's default outline. Mouse clicks on buttons don't show it. */
+:focus-visible {
+  outline: 2px solid var(--maroon-text) !important;
+  outline-offset: 3px;
+}
+
+/* "Skip to content": hidden until a keyboard user tabs to it. */
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -100px;
+  z-index: 100;
+  background: var(--off-white);
+  color: var(--charcoal);
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* Respect "reduce motion" settings. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The skip link moves focus to <main>; no ring around the whole page. */
+#main:focus-visible {
+  outline: none !important;
 }

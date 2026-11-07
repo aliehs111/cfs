@@ -98,7 +98,7 @@ export default function AboutPage() {
 
             <p
               className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.4)', letterSpacing: '0.16em' }}
+              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
             >
               Sectors
             </p>
@@ -118,7 +118,7 @@ export default function AboutPage() {
 
             <p
               className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.4)', letterSpacing: '0.16em' }}
+              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
             >
               What we install
             </p>
@@ -138,7 +138,7 @@ export default function AboutPage() {
 
             <p
               className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.4)', letterSpacing: '0.16em' }}
+              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
             >
               Where we work
             </p>

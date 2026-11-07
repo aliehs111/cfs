@@ -21,7 +21,7 @@ const ROLE_LABELS = {
 }
 
 const quietButton = {
-  color: 'rgba(236,228,215,0.4)',
+  color: 'rgba(236,228,215,0.55)',
   letterSpacing: '0.14em',
   background: 'none',
   border: 'none',
@@ -99,12 +99,12 @@ export default function AdminPage() {
     >
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap items-baseline justify-between gap-4 mb-8">
-          <p
+          <h1
             className="font-body text-xs font-medium tracking-widest uppercase"
             style={{ color: 'var(--off-white)', letterSpacing: '0.16em' }}
           >
             Admin
-          </p>
+          </h1>
           {me && (
             <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
               <span className="font-body" style={{ color: 'rgba(236,228,215,0.6)', fontSize: '13px', fontWeight: 300 }}>
@@ -129,7 +129,7 @@ export default function AdminPage() {
         </div>
 
         {authed === null && (
-          <p className="font-body text-xs" style={{ color: 'rgba(236,228,215,0.4)' }}>
+          <p className="font-body text-xs" style={{ color: 'rgba(236,228,215,0.55)' }}>
             {error || 'Loading...'}
           </p>
         )}
@@ -137,7 +137,7 @@ export default function AdminPage() {
         {authed === 'forbidden' && (
           <p className="font-body" style={{ color: 'rgba(236,228,215,0.7)', fontSize: '15px', fontWeight: 300 }}>
             Your account doesn&apos;t have admin access.{' '}
-            <Link to={homeFor(me)} style={{ color: 'var(--maroon)' }}>
+            <Link to={homeFor(me)} style={{ color: 'var(--maroon-text)' }}>
               Continue to the site →
             </Link>
           </p>
@@ -146,7 +146,7 @@ export default function AdminPage() {
         {authed === true && (
           <div>
             <div className="mb-12">
-              <nav className="flex flex-wrap gap-x-8 gap-y-3">
+              <nav className="flex flex-wrap gap-x-8 gap-y-3" aria-label="Admin sections">
                 {Object.entries({
                   [TABS.SUBMISSIONS]: 'Submissions',
                   [TABS.INTAKES]: 'Project Intakes',
@@ -158,9 +158,10 @@ export default function AdminPage() {
                   <button
                     key={key}
                     onClick={() => setTab(key)}
+                    aria-current={tab === key ? 'page' : undefined}
                     className="font-body text-xs font-medium tracking-widest uppercase transition-all duration-300"
                     style={{
-                      color: tab === key ? 'var(--off-white)' : 'var(--maroon)',
+                      color: tab === key ? 'var(--off-white)' : 'var(--maroon-text)',
                       letterSpacing: '0.14em',
                       background: 'none',
                       border: 'none',
@@ -185,7 +186,7 @@ export default function AdminPage() {
             {loading && (
               <p
                 className="font-body text-xs"
-                style={{ color: 'rgba(236,228,215,0.4)' }}
+                style={{ color: 'rgba(236,228,215,0.55)' }}
               >
                 Loading...
               </p>
@@ -193,7 +194,7 @@ export default function AdminPage() {
             {listError && (
               <p
                 className="font-body text-xs mb-6"
-                style={{ color: 'var(--maroon)' }}
+                style={{ color: 'var(--maroon-text)' }}
               >
                 {listError}
               </p>
@@ -205,7 +206,7 @@ export default function AdminPage() {
                   <p
                     className="font-body"
                     style={{
-                      color: 'rgba(236,228,215,0.4)',
+                      color: 'rgba(236,228,215,0.55)',
                       fontSize: '15px',
                       fontWeight: 300,
                     }}
@@ -244,7 +245,7 @@ export default function AdminPage() {
                               <p
                                 className="font-body"
                                 style={{
-                                  color: 'rgba(236,228,215,0.5)',
+                                  color: 'rgba(236,228,215,0.55)',
                                   fontSize: '13px',
                                   fontWeight: 300,
                                 }}
@@ -259,7 +260,7 @@ export default function AdminPage() {
                               onClick={(e) => e.stopPropagation()}
                               className="font-body hover:opacity-70"
                               style={{
-                                color: 'var(--maroon)',
+                                color: 'var(--maroon-text)',
                                 fontSize: '13px',
                                 fontWeight: 400,
                               }}
@@ -272,7 +273,7 @@ export default function AdminPage() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="font-body block hover:opacity-70"
                                 style={{
-                                  color: 'rgba(236,228,215,0.5)',
+                                  color: 'rgba(236,228,215,0.55)',
                                   fontSize: '13px',
                                   fontWeight: 300,
                                   marginTop: '2px',
@@ -286,7 +287,7 @@ export default function AdminPage() {
                             <p
                               className="font-body"
                               style={{
-                                color: 'rgba(236,228,215,0.4)',
+                                color: 'rgba(236,228,215,0.55)',
                                 fontSize: '12px',
                                 fontWeight: 300,
                               }}
@@ -298,7 +299,7 @@ export default function AdminPage() {
                             <span
                               className="font-body text-xs font-medium tracking-widest uppercase"
                               style={{
-                                color: 'rgba(236,228,215,0.4)',
+                                color: 'rgba(236,228,215,0.55)',
                                 letterSpacing: '0.12em',
                               }}
                             >
@@ -338,7 +339,7 @@ export default function AdminPage() {
                   <p
                     className="font-body"
                     style={{
-                      color: 'rgba(236,228,215,0.4)',
+                      color: 'rgba(236,228,215,0.55)',
                       fontSize: '15px',
                       fontWeight: 300,
                     }}
@@ -372,7 +373,7 @@ export default function AdminPage() {
                             <p
                               className="font-body"
                               style={{
-                                color: 'rgba(236,228,215,0.4)',
+                                color: 'rgba(236,228,215,0.55)',
                                 fontSize: '12px',
                                 fontWeight: 300,
                               }}
@@ -382,7 +383,7 @@ export default function AdminPage() {
                             <p
                               className="font-body text-xs font-medium tracking-widest uppercase mt-1"
                               style={{
-                                color: 'var(--maroon)',
+                                color: 'var(--maroon-text)',
                                 letterSpacing: '0.12em',
                               }}
                             >
@@ -391,7 +392,7 @@ export default function AdminPage() {
                             {i.status === 'in_progress' && (
                               <p
                                 className="font-body text-xs mt-1"
-                                style={{ color: 'rgba(236,228,215,0.5)' }}
+                                style={{ color: 'rgba(236,228,215,0.55)' }}
                               >
                                 Left without finishing
                               </p>
@@ -417,7 +418,7 @@ export default function AdminPage() {
                             <span
                               className="font-body text-xs font-medium tracking-widest uppercase"
                               style={{
-                                color: 'rgba(236,228,215,0.4)',
+                                color: 'rgba(236,228,215,0.55)',
                                 letterSpacing: '0.12em',
                               }}
                             >
@@ -432,7 +433,7 @@ export default function AdminPage() {
                                 <p
                                   className="font-body text-xs font-medium tracking-widest uppercase mb-2"
                                   style={{
-                                    color: m.role === 'user' ? 'rgba(236,228,215,0.4)' : 'var(--maroon)',
+                                    color: m.role === 'user' ? 'rgba(236,228,215,0.55)' : 'var(--maroon-text)',
                                     letterSpacing: '0.12em',
                                   }}
                                 >
@@ -461,7 +462,7 @@ export default function AdminPage() {
                               <p
                                 className="font-body text-xs font-medium tracking-widest uppercase mb-3"
                                 style={{
-                                  color: 'rgba(236,228,215,0.4)',
+                                  color: 'rgba(236,228,215,0.55)',
                                   letterSpacing: '0.12em',
                                 }}
                               >
@@ -486,7 +487,7 @@ export default function AdminPage() {
                               <p
                                 className="font-body text-xs font-medium tracking-widest uppercase mb-3"
                                 style={{
-                                  color: 'rgba(236,228,215,0.4)',
+                                  color: 'rgba(236,228,215,0.55)',
                                   letterSpacing: '0.12em',
                                 }}
                               >

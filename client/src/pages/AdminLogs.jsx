@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch, readError } from '../lib/auth'
 
-const muted = 'rgba(236,228,215,0.4)'
+const muted = 'rgba(236,228,215,0.55)'
 const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
 
@@ -51,7 +51,7 @@ const EVENT_LABELS = {
   'server.error': 'Server error',
 }
 
-const LEVEL_COLORS = { error: 'var(--maroon)', warning: '#c9a24a', info: muted }
+const LEVEL_COLORS = { error: 'var(--maroon-text)', warning: '#c9a24a', info: muted }
 
 const fieldStyle = {
   backgroundColor: 'var(--charcoal)',
@@ -213,7 +213,7 @@ export default function AdminLogs({ me, onUnauthorized }) {
               <p
                 className="font-display"
                 style={{
-                  color: label === 'Errors' && value > 0 ? 'var(--maroon)' : 'var(--off-white)',
+                  color: label === 'Errors' && value > 0 ? 'var(--maroon-text)' : 'var(--off-white)',
                   fontSize: '28px',
                   fontWeight: 500,
                   lineHeight: 1.2,
@@ -297,7 +297,7 @@ export default function AdminLogs({ me, onUnauthorized }) {
 
       {loading && <p className="font-body text-xs" style={{ color: muted }}>Loading...</p>}
       {result.error && (
-        <p className="font-body text-xs mb-6" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mb-6" style={{ color: 'var(--maroon-text)' }}>
           {result.error}
         </p>
       )}

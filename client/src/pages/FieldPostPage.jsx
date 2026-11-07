@@ -64,7 +64,7 @@ export default function FieldPostPage() {
       <div className="flex items-center justify-between gap-4">
         <p
           className="uppercase"
-          style={{ color: 'var(--maroon)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
+          style={{ color: 'var(--maroon-text)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
         >
           In the Field · Staff
         </p>
@@ -78,7 +78,7 @@ export default function FieldPostPage() {
         )}
       </div>
 
-      {loading && <p style={{ opacity: 0.4, marginTop: '2rem' }}>Loading…</p>}
+      {loading && <p style={{ opacity: 0.55, marginTop: '2rem' }}>Loading…</p>}
       {user && !canPost(user) && (
         <p style={{ marginTop: '2rem', fontSize: '0.95rem', lineHeight: 1.7, opacity: 0.8 }}>
           Your account can comment on posts but not create them. Ask an admin if you need posting access.{' '}
@@ -329,7 +329,7 @@ function PostManager({ user, onUnauthorized }) {
             e.target.value = ''
           }}
         />
-        <p style={{ fontSize: '0.75rem', opacity: 0.45, marginTop: '0.6rem' }}>
+        <p style={{ fontSize: '0.75rem', opacity: 0.55, marginTop: '0.6rem' }}>
           Up to {MAX_FILES} per post. Videos up to {MAX_VIDEO_MB} MB (about a minute of 1080p).
         </p>
 
@@ -356,9 +356,9 @@ function PostManager({ user, onUnauthorized }) {
           style={inputStyle}
         />
 
-        <p style={{ fontSize: '0.8rem', opacity: 0.5, marginTop: '1.5rem' }}>Posting as {user.name}.</p>
+        <p style={{ fontSize: '0.8rem', opacity: 0.55, marginTop: '1.5rem' }}>Posting as {user.name}.</p>
 
-        {error && <p className="text-sm mt-6" style={{ color: 'var(--maroon)' }}>{error}</p>}
+        {error && <p className="text-sm mt-6" style={{ color: 'var(--maroon-text)' }}>{error}</p>}
         {progress && <p className="text-sm mt-6" style={{ opacity: 0.7 }}>{progress}</p>}
 
         <button
@@ -459,7 +459,7 @@ function PostActions({ post, onDelete, onSaved, onUnauthorized }) {
           placeholder="Location"
           style={inputStyle}
         />
-        {error && <p className="text-xs mt-3" style={{ color: 'var(--maroon)' }}>{error}</p>}
+        {error && <p className="text-xs mt-3" style={{ color: 'var(--maroon-text)' }}>{error}</p>}
         <div className="flex gap-6 mt-4">
           <button type="submit" disabled={busy} className="text-xs uppercase" style={textButton}>
             {busy ? 'Saving…' : 'Save'}
@@ -468,7 +468,7 @@ function PostActions({ post, onDelete, onSaved, onUnauthorized }) {
             type="button"
             onClick={() => setEditing(false)}
             className="text-xs uppercase"
-            style={{ ...textButton, opacity: 0.5, borderBottom: 'none' }}
+            style={{ ...textButton, opacity: 0.55, borderBottom: 'none' }}
           >
             Cancel
           </button>
@@ -486,7 +486,7 @@ function PostActions({ post, onDelete, onSaved, onUnauthorized }) {
         type="button"
         onClick={onDelete}
         className="text-xs uppercase"
-        style={{ ...textButton, color: 'var(--maroon)', borderBottomColor: 'rgba(168,36,58,0.4)' }}
+        style={{ ...textButton, color: 'var(--maroon-text)', borderBottomColor: 'rgba(168,36,58,0.4)' }}
       >
         Delete
       </button>

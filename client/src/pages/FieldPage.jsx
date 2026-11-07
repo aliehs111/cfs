@@ -64,7 +64,7 @@ export default function FieldPage() {
       <div className="flex items-start justify-between">
         <p
           className="uppercase"
-          style={{ color: 'var(--maroon)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
+          style={{ color: 'var(--maroon-text)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
         >
           From our crews
         </p>
@@ -122,10 +122,10 @@ export default function FieldPage() {
       <div className="hairline mt-14" />
 
       <div className="mt-14">
-        {loading && <p style={{ color: 'var(--off-white)', opacity: 0.5 }}>Loading…</p>}
-        {error && <p style={{ color: 'var(--maroon)' }}>{error}</p>}
+        {loading && <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading…</p>}
+        {error && <p style={{ color: 'var(--maroon-text)' }}>{error}</p>}
         {!loading && !error && posts.length === 0 && (
-          <p style={{ color: 'var(--off-white)', opacity: 0.5 }}>
+          <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>
             Nothing posted yet. Check back soon.
           </p>
         )}
@@ -256,7 +256,7 @@ export function FieldPostCard({ post, onOpenImage, footer }) {
       <p
         className="uppercase"
         style={{
-          color: 'var(--maroon)',
+          color: 'var(--maroon-text)',
           letterSpacing: '0.16em',
           fontSize: '0.7rem',
           marginTop: '1.25rem',
@@ -285,7 +285,7 @@ export function FieldPostCard({ post, onOpenImage, footer }) {
           style={{
             fontSize: '0.8rem',
             color: 'var(--off-white)',
-            opacity: 0.45,
+            opacity: 0.55,
             marginTop: '0.5rem',
             letterSpacing: '0.04em',
           }}

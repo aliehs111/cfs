@@ -15,9 +15,9 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - §7 Account ownership, billing and costs *(a decision, not code)*
 - ~~§8 Mobile navigation menu~~ ✅ done
 - ~~§10 Admin → Projects tab with photo upload~~ ✅ done
-- §9 Privacy policy page
-- §13 Heading font fix *(decision + small change)*
-- §16 Accessibility pass
+- §9 Privacy policy page *(approved; just needs a privacy email address)*
+- ~~§13 Heading font~~ ✅ kept DM Sans
+- ~~§16 Accessibility pass~~ ✅ done
 
 **At launch**
 - §3 SEO and moving the domain off Hibu
@@ -462,7 +462,7 @@ The navbar has six links (Home, Projects, In the Field, How can we help?, About,
 
 ## 9. Privacy policy page
 
-**Status:** Not started. **Before launch.**
+**Status:** Draft built Nov 7 2026 (`client/src/pages/PrivacyPage.jsx`, linked in the footer). Written from what the site actually does (chat text not stored; intake saved even if unfinished; no visit IPs; Anthropic, Cloudflare, Supabase, Railway, Gmail named as providers). A daily job now deletes logs older than 90 days (`server/intake_store.py`) so the stated retention is true. **Text approved Nov 7 2026.** **Remaining:** add a privacy email address (`PRIVACY_EMAIL` at the top of the file; until then it points to the phone number and Contact page); optional lawyer look, especially the Anthropic no-training sentence. **Keep the page in step with the site:** any feature that changes what's collected or who processes it must update this page.
 
 A short, plain-language `/privacy` page linked in the footer. It should cover:
 - What's collected: contact form details; project descriptions typed into `/discuss`; chat messages; basic page-visit data (once logging exists).
@@ -562,7 +562,7 @@ Add to the existing `logs` table: `actor_id` → `app_users.id` (null for visito
 
 ## 13. Fix the heading font (Cormorant Garamond)
 
-**Status:** Not started. Small.
+**Status:** ✅ Decided Nov 7 2026: **keep DM Sans for headings.** Removed Cormorant Garamond from the Google Fonts link (it was downloading on every page for nothing), deleted the ignored `client/tailwind.config.js`, and set `--font-display`/`--font-body` to DM Sans in `client/src/index.css` so it's explicit. The brief's font line is out of date.
 
 The brief specifies Cormorant Garamond for headlines, and pages use `className="font-display"`, but **it has never actually loaded**. The font family is defined in `client/tailwind.config.js`, which **Tailwind v4 ignores**, so every heading renders in DM Sans. The Google Fonts link in `index.html` is fine.
 
@@ -609,7 +609,7 @@ Then delete the unused `tailwind.config.js`, and review every page because headi
 
 ## 16. Accessibility pass
 
-**Status:** Not started. **Before launch;** overlaps with SEO (section 3).
+**Status:** ✅ Done Nov 7 2026. axe-core reports **0 violations** on every public page (desktop and 375px), the signed-in admin tabs, the posting page and the login/password pages. Fixed: contrast (faded text raised to ≥55% on dark / ≥60% on cream; new `--maroon-text: #D9566B` for small maroon text on dark backgrounds, approved by the developer; `--maroon` unchanged for lines, buttons and text on cream); real `<label for>` + autocomplete on the contact form; one `<h1>` per page and no skipped heading levels; labelled admin tab nav with `aria-current`; global keyboard focus ring; "Skip to content" link; `prefers-reduced-motion` support; alert/status roles on form messages; hard-hat icon raised to 3:1. Keyboard-tested: logical tab order, visible focus everywhere. **To keep it passing:** use `--maroon-text` (not `--maroon`) for small text on dark backgrounds, and don't drop text opacity below 0.55 (dark) / 0.6 (cream). Not tested: a real screen reader (VoiceOver) walkthrough — worth 15 minutes before launch.
 
 - **Contrast:** much of the text is off-white at 40–70% opacity on charcoal, plus the faint hard-hat link. Check against WCAG AA (4.5:1 for body text) and raise opacity where it fails.
 - **Keyboard:** every link, button, filter chip, modal, the chat widget, the lightbox, and the mobile menu (section 8) is usable with Tab/Enter/Escape, with a visible focus outline.

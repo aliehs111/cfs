@@ -143,7 +143,7 @@ export default function ChatWidget() {
               <p
                 className="font-body"
                 style={{
-                  color: 'rgba(236,228,215,0.3)',
+                  color: 'rgba(236,228,215,0.55)',
                   fontSize: '11px',
                   letterSpacing: '0.06em',
                 }}
@@ -157,7 +157,7 @@ export default function ChatWidget() {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: 'rgba(236,228,215,0.3)',
+                color: 'rgba(236,228,215,0.55)',
                 fontSize: '18px',
                 lineHeight: 1,
               }}
@@ -202,7 +202,7 @@ export default function ChatWidget() {
                   {m.role === 'assistant' &&
                     loading &&
                     i === messages.length - 1 &&
-                    m.content === '' && <span style={{ opacity: 0.4 }}>...</span>}
+                    m.content === '' && <span style={{ opacity: 0.55 }}>...</span>}
                 </p>
               </div>
             ))}
@@ -248,7 +248,7 @@ export default function ChatWidget() {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: 'var(--maroon)',
+                color: 'var(--maroon-text)',
                 fontSize: '18px',
                 lineHeight: 1,
                 opacity: !input.trim() || loading ? 0.25 : 1,

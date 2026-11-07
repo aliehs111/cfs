@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, readError, ROLE_LABELS } from '../lib/auth'
 
-const muted = 'rgba(236,228,215,0.4)'
+const muted = 'rgba(236,228,215,0.55)'
 const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
 
@@ -114,7 +114,7 @@ export default function AdminUsers({ me, onUnauthorized }) {
 
   if (error) {
     return (
-      <p className="font-body text-xs" style={{ color: 'var(--maroon)' }}>
+      <p className="font-body text-xs" style={{ color: 'var(--maroon-text)' }}>
         {error}
       </p>
     )
@@ -262,7 +262,7 @@ function AddUserForm({ roles, onCreated, onCancel, onUnauthorized }) {
         </select>
       </div>
       {error && (
-        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon-text)' }}>
           {error}
         </p>
       )}
@@ -370,7 +370,7 @@ function UserRow({ user, me, roles, onSaved, onPasswordReset, onUnauthorized }) 
         </div>
 
         <div className="md:col-span-2">
-          <p className="font-body" style={{ color: user.active ? soft : 'var(--maroon)', fontSize: '12px', fontWeight: 300 }}>
+          <p className="font-body" style={{ color: user.active ? soft : 'var(--maroon-text)', fontSize: '12px', fontWeight: 300 }}>
             {status}
           </p>
           <p className="font-body" style={{ color: muted, fontSize: '12px', fontWeight: 300 }}>
@@ -427,7 +427,7 @@ function UserRow({ user, me, roles, onSaved, onPasswordReset, onUnauthorized }) 
         </div>
       </div>
       {error && (
-        <p className="font-body text-xs mt-3" role="alert" style={{ color: 'var(--maroon)' }}>
+        <p className="font-body text-xs mt-3" role="alert" style={{ color: 'var(--maroon-text)' }}>
           {error}
         </p>
       )}

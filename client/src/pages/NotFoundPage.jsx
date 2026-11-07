@@ -12,7 +12,7 @@ export default function NotFoundPage() {
     <section className="w-full max-w-3xl mx-auto px-6 py-32">
       <p
         className="uppercase"
-        style={{ color: 'var(--maroon)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
+        style={{ color: 'var(--maroon-text)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
       >
         Page not found
       </p>

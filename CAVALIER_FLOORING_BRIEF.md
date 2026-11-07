@@ -58,7 +58,7 @@ Cavalier's brand is **maroon and black**. The feel should be confident, gallery-
 **Use cream sparingly** — for the about page, product detail areas, anywhere that should feel like a different room. Charcoal is the dominant surface.
 
 ### Typography (same as CTX201)
-- **Display / serif:** Cormorant Garamond (headlines, italic accents)
+- **Display:** DM Sans for headlines too (decided Nov 2026; Cormorant Garamond was dropped)
 - **Body / sans:** DM Sans
 - Load both from Google Fonts in `index.html` (copy the link from CTX201's `client/index.html`).
 

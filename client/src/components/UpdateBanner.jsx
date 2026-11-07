@@ -34,7 +34,7 @@ export default function UpdateBanner() {
           background: 'none',
           border: 'none',
           borderBottom: '1px solid var(--maroon)',
-          color: 'var(--maroon)',
+          color: 'var(--maroon-text)',
           fontSize: '13px',
           fontWeight: 500,
           cursor: 'pointer',

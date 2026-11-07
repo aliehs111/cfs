@@ -42,7 +42,7 @@ export default function ProjectDetailPage() {
   if (loading) {
     return (
       <section className="w-full max-w-7xl mx-auto px-6 py-24">
-        <p style={{ color: 'var(--off-white)', opacity: 0.5 }}>Loading project…</p>
+        <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading project…</p>
       </section>
     )
   }
@@ -92,7 +92,7 @@ export default function ProjectDetailPage() {
   if (error) {
     return (
       <section className="w-full max-w-7xl mx-auto px-6 py-24">
-        <p style={{ color: 'var(--maroon)' }}>Failed to load project.</p>
+        <p style={{ color: 'var(--maroon-text)' }}>Failed to load project.</p>
       </section>
     )
   }
@@ -120,10 +120,10 @@ export default function ProjectDetailPage() {
       <p
         className="uppercase"
         style={{
-          color: 'var(--maroon)',
+          color: 'var(--maroon-text)',
           letterSpacing: '0.16em',
           fontSize: '0.7rem',
-          opacity: 0.85,
+          opacity: 1,
           margin: 0,
         }}
       >
@@ -185,9 +185,9 @@ export default function ProjectDetailPage() {
             </p>
           )}
         </div>
-        <aside>
+        <div>
           <MetaList project={project} />
-        </aside>
+        </div>
       </div>
 
       {galleryImages.length > 0 && (
@@ -195,10 +195,10 @@ export default function ProjectDetailPage() {
           <p
             className="uppercase"
             style={{
-              color: 'var(--maroon)',
+              color: 'var(--maroon-text)',
               letterSpacing: '0.16em',
               fontSize: '0.7rem',
-              opacity: 0.85,
+              opacity: 1,
               marginBottom: '1.5rem',
             }}
           >
@@ -281,7 +281,7 @@ function MetaList({ project }) {
               fontSize: '0.65rem',
               letterSpacing: '0.16em',
               color: 'var(--off-white)',
-              opacity: 0.45,
+              opacity: 0.55,
               marginBottom: '0.35rem',
             }}
           >

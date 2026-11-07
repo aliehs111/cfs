@@ -10,7 +10,7 @@ const quiet = {
   padding: 0,
   cursor: 'pointer',
   color: 'var(--off-white)',
-  opacity: 0.5,
+  opacity: 0.55,
   fontSize: '0.7rem',
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
@@ -110,7 +110,7 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
 
   if (comment.deleted) {
     return (
-      <p style={{ fontSize: '0.8rem', opacity: 0.4, fontStyle: 'italic', margin: '0.5rem 0' }}>Comment removed</p>
+      <p style={{ fontSize: '0.8rem', opacity: 0.55, fontStyle: 'italic', margin: '0.5rem 0' }}>Comment removed</p>
     )
   }
 
@@ -134,7 +134,7 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
     <div style={{ margin: '0.5rem 0' }}>
       <p style={{ fontSize: '0.75rem', margin: 0, color: 'var(--off-white)' }}>
         <span style={{ opacity: 0.85, fontWeight: 500 }}>{comment.author}</span>
-        <span style={{ opacity: 0.4 }}>
+        <span style={{ opacity: 0.55 }}>
           {' '}
           · {timeAgo(comment.created_at)}
           {comment.edited_at ? ' · edited' : ''}
@@ -175,7 +175,7 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
           )}
         </div>
       )}
-      {error && <p style={{ color: 'var(--maroon)', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--maroon-text)', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>{error}</p>}
       {replying && (
         <div style={{ marginLeft: '1rem' }}>
           <Composer
@@ -236,7 +236,7 @@ function Composer({ postId, parentId, commentId, initial = '', placeholder, subm
         disabled={busy}
         style={textareaStyle}
       />
-      {error && <p style={{ color: 'var(--maroon)', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--maroon-text)', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>{error}</p>}
       <div className="flex gap-4" style={{ marginTop: '0.5rem' }}>
         <button type="submit" disabled={busy || !body.trim()} style={{ ...quiet, opacity: busy || !body.trim() ? 0.3 : 0.9 }}>
           {busy ? 'Posting…' : submitLabel}

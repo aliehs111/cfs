@@ -17,7 +17,7 @@ export default function Contact() {
             >
               Contact
             </p>
-            <h2
+            <h1
               className="font-display mb-8"
               style={{
                 color: 'var(--charcoal)',
@@ -28,13 +28,13 @@ export default function Contact() {
               }}
             >
               Let's talk through your project.
-            </h2>
+            </h1>
 
             <div className="hairline-dark mb-8" />
 
             <p
               className="font-body text-xs font-medium tracking-widest uppercase mb-3"
-              style={{ color: 'rgba(26,24,22,0.4)', letterSpacing: '0.16em' }}
+              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
             >
               Optional first step
             </p>

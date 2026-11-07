@@ -90,13 +90,13 @@ export default function ProjectsPage() {
 
       <div className="mt-16">
         {loading && (
-          <p style={{ color: 'var(--off-white)', opacity: 0.5 }}>Loading projects…</p>
+          <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading projects…</p>
         )}
         {error && (
-          <p style={{ color: 'var(--maroon)' }}>{error}</p>
+          <p style={{ color: 'var(--maroon-text)' }}>{error}</p>
         )}
         {!loading && !error && filtered.length === 0 && (
-          <p style={{ color: 'var(--off-white)', opacity: 0.5 }}>
+          <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>
             No projects match those filters.
           </p>
         )}
@@ -123,16 +123,16 @@ function ProjectCard({ project }) {
       <p
         className="uppercase"
         style={{
-          color: 'var(--maroon)',
+          color: 'var(--maroon-text)',
           letterSpacing: '0.16em',
           fontSize: '0.7rem',
-          opacity: 0.85,
+          opacity: 1,
           margin: 0,
         }}
       >
         {project.project_type}
       </p>
-      <h3
+      <h2
         className="font-display project-card-name"
         style={{
           fontSize: '1.5rem',
@@ -143,13 +143,13 @@ function ProjectCard({ project }) {
         }}
       >
         {project.name}
-      </h3>
+      </h2>
       {project.location && (
         <p
           style={{
             fontSize: '0.8rem',
             color: 'var(--off-white)',
-            opacity: 0.45,
+            opacity: 0.55,
             marginTop: '0.4rem',
             letterSpacing: '0.04em',
           }}

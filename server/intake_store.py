@@ -23,6 +23,8 @@ from supabase_client import get_supabase
 TABLE = "project_responses"
 ABANDON_AFTER = timedelta(minutes=10)
 SWEEP_EVERY_SECONDS = 60
+LOG_RETENTION_DAYS = 90  # stated in the privacy policy (client/src/pages/PrivacyPage.jsx)
+CLEANUP_EVERY_SECONDS = 24 * 60 * 60
 ROLE_LABELS = {"owner": "Owner / Facility", "specifier": "GC / Specifier"}
 
 
@@ -137,6 +139,12 @@ def sweep_once() -> None:
         send_intake_alert(row, finished=False)
 
 
+def delete_old_logs() -> None:
+    """Delete `logs` rows older than LOG_RETENTION_DAYS."""
+    cutoff = (_now() - timedelta(days=LOG_RETENTION_DAYS)).isoformat()
+    get_supabase().table("logs").delete().lt("created_at", cutoff).execute()
+
+
 _started = False
 
 
@@ -147,11 +155,19 @@ def start_sweeper() -> None:
     _started = True
 
     def loop():
+        last_cleanup = 0.0
         while True:
             time.sleep(SWEEP_EVERY_SECONDS)
             try:
                 sweep_once()
             except Exception:
                 traceback.print_exc()
+            # Once a day (and shortly after each restart).
+            if time.time() - last_cleanup > CLEANUP_EVERY_SECONDS:
+                last_cleanup = time.time()
+                try:
+                    delete_old_logs()
+                except Exception:
+                    traceback.print_exc()
 
     threading.Thread(target=loop, name="intake-sweeper", daemon=True).start()

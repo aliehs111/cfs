@@ -169,6 +169,13 @@ async def update_user(user_id: str, payload: UpdateUser, actor: dict = Depends(r
 
     res = get_supabase().table(auth.TABLE).update(changes).eq("id", user_id).execute()
     updated = res.data[0]
+    if "email" in changes:
+        # Their email alert subscriptions follow them to the new address.
+        from routes.my_alerts import move_recipient
+        try:
+            move_recipient(target["email"], changes["email"])
+        except Exception:
+            traceback.print_exc()
     what = "; ".join(described) or "Details updated"
     log_event("user.updated", route=f"/api/admin/users/{user_id}", actor_id=actor["id"],
               entity_type="user", entity_id=user_id, message=f"{auth.full_name(updated)}: {what}",

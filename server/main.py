@@ -27,6 +27,7 @@ from routes.field import router as field_router
 from routes.account import router as account_router
 from routes.users import router as users_router
 from routes.admin_projects import router as admin_projects_router
+from routes.my_alerts import router as my_alerts_router
 
 app = FastAPI(title="Cavalier Flooring API")
 app.state.limiter = limiter
@@ -89,6 +90,7 @@ app.include_router(field_router, prefix="/api")
 app.include_router(account_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(admin_projects_router, prefix="/api")
+app.include_router(my_alerts_router, prefix="/api")
 
 
 @app.get("/api/health")

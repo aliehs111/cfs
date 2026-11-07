@@ -1,27 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import ContactForm from './ContactForm'
 
+// The open dialog is its own component, so closing it unmounts it and the
+// "sent" state starts fresh next time.
 export default function ContactModal({ isOpen, onClose }) {
+  return isOpen ? <OpenContactModal onClose={onClose} /> : null
+}
+
+function OpenContactModal({ onClose }) {
   const [submitted, setSubmitted] = useState(false)
+  const dialog = useRef(null)
+  const titleId = useId()
 
   useEffect(() => {
-    if (!isOpen) {
-      setSubmitted(false)
-      return
-    }
-    const handleEsc = (e) => {
+    const opener = document.activeElement
+    // Move focus into the dialog so screen readers announce it.
+    dialog.current?.focus()
+    const handleKey = (e) => {
       if (e.key === 'Escape') onClose()
+      // Keep Tab inside the dialog while it's open.
+      if (e.key === 'Tab' && dialog.current) {
+        const items = dialog.current.querySelectorAll('button, [href], input:not([tabindex="-1"]), textarea, select')
+        const first = items[0]
+        const last = items[items.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
-    document.addEventListener('keydown', handleEsc)
+    document.addEventListener('keydown', handleKey)
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', handleEsc)
+      document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = previousOverflow
+      if (opener instanceof HTMLElement) opener.focus()
     }
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
+  }, [onClose])
 
   return (
     <div
@@ -40,7 +59,13 @@ export default function ContactModal({ isOpen, onClose }) {
       onClick={onClose}
     >
       <div
+        ref={dialog}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         style={{
+          outline: 'none',
           backgroundColor: 'var(--charcoal)',
           border: '1px solid rgba(236,228,215,0.1)',
           maxWidth: '560px',
@@ -55,7 +80,7 @@ export default function ContactModal({ isOpen, onClose }) {
       >
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label="Close dialog"
           style={{
             position: 'absolute',
             top: '16px',
@@ -74,7 +99,8 @@ export default function ContactModal({ isOpen, onClose }) {
 
         {!submitted && (
           <>
-            <h3
+            <h2
+              id={titleId}
               className="font-display mb-3"
               style={{
                 color: 'var(--off-white)',
@@ -86,7 +112,7 @@ export default function ContactModal({ isOpen, onClose }) {
               }}
             >
               Let's continue this conversation.
-            </h3>
+            </h2>
             <p
               className="font-body mb-10"
               style={{

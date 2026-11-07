@@ -115,7 +115,8 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
   }
 
   const mine = user && comment.user_id === user.id
-  const canDelete = mine || isAdmin(user)
+  // Authors manage their own comments; admins can edit or delete any.
+  const canManage = mine || isAdmin(user)
 
   const remove = async () => {
     const who = mine ? 'your comment' : `${comment.author}'s comment`
@@ -163,12 +164,12 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
               Reply
             </button>
           )}
-          {mine && (
+          {canManage && (
             <button type="button" onClick={() => setEditing(true)} style={quiet}>
               Edit
             </button>
           )}
-          {canDelete && (
+          {canManage && (
             <button type="button" onClick={remove} style={quiet}>
               Delete
             </button>

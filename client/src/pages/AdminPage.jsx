@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AdminLogs from './AdminLogs'
 import AdminNotifications from './AdminNotifications'
 import AdminProjects from './AdminProjects'
@@ -34,14 +34,20 @@ export default function AdminPage() {
   const [me, setMe] = useState(null)
   // null = checking; true = signed in as an admin; 'forbidden' = signed in without admin access
   const [authed, setAuthed] = useState(null)
-  const [tab, setTab] = useState(TABS.SUBMISSIONS)
+  const [params] = useSearchParams()
+  // Links like /admin?tab=projects&edit=<id> open a tab (and a project) directly.
+  const [tab, setTab] = useState(() => (Object.values(TABS).includes(params.get('tab')) ? params.get('tab') : TABS.SUBMISSIONS))
+  const editProjectId = tab === TABS.PROJECTS ? params.get('edit') : null
   const [contacts, setContacts] = useState([])
   const [intakes, setIntakes] = useState([])
   const [error, setError] = useState('')
   const [listState, setListState] = useState({ tab: null, error: '' }) // which list finished loading
   const [expanded, setExpanded] = useState(null)
 
-  const goToLogin = useCallback(() => navigate('/login?next=/admin', { replace: true }), [navigate])
+  const goToLogin = useCallback(
+    () => navigate(`/login?next=${encodeURIComponent('/admin' + window.location.search)}`, { replace: true }),
+    [navigate]
+  )
 
   useEffect(() => {
     if (!getToken()) return goToLogin()
@@ -111,6 +117,13 @@ export default function AdminPage() {
                 {me.name} · {ACCOUNT_ROLES[me.role]}
               </span>
               <Link
+                to="/my-alerts"
+                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
+                style={quietButton}
+              >
+                My email alerts
+              </Link>
+              <Link
                 to="/login?change=1&next=/admin"
                 className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={quietButton}
@@ -179,7 +192,7 @@ export default function AdminPage() {
               </nav>
             </div>
 
-            {tab === TABS.PROJECTS && <AdminProjects onUnauthorized={handleUnauthorized} />}
+            {tab === TABS.PROJECTS && <AdminProjects onUnauthorized={handleUnauthorized} initialEditId={editProjectId} />}
             {tab === TABS.USERS && <AdminUsers me={me} onUnauthorized={handleUnauthorized} />}
             {tab === TABS.LOGS && <AdminLogs me={me} onUnauthorized={handleUnauthorized} />}
 

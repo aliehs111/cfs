@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiFetch, readError } from '../lib/auth'
 
 const muted = 'rgba(236,228,215,0.55)'
@@ -57,8 +58,12 @@ export default function AdminNotifications({ onUnauthorized }) {
   return (
     <div>
       <p className="font-body mb-10" style={{ color: soft, fontSize: '14px', fontWeight: 300, lineHeight: 1.7, maxWidth: '40rem' }}>
-        Choose who gets an email for each event. Recipients don&apos;t need an account. Changes take effect
-        immediately.
+        Choose who gets an email for each event, including shared inboxes and people without an account.
+        Changes take effect immediately. To choose just your own alerts, use{' '}
+        <Link to="/my-alerts" style={{ color: 'var(--off-white)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+          My email alerts
+        </Link>
+        .
         {data.sender && (
           <>
             {' '}

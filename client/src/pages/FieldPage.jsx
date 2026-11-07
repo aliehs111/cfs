@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import FieldComments from '../components/FieldComments'
-import { canPost, useCurrentUser } from '../lib/auth'
+import FieldPostEditor from '../components/FieldPostEditor'
+import { canPost, isAdmin, useCurrentUser } from '../lib/auth'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -14,6 +15,8 @@ function formatPostDate(iso) {
   })
 }
 
+const VIEW_KEY = 'cavalier_field_view'
+
 export default function FieldPage() {
   const [posts, setPosts] = useState([])
   const [hasMore, setHasMore] = useState(false)
@@ -22,6 +25,22 @@ export default function FieldPage() {
   const [error, setError] = useState(null)
   const [lightbox, setLightbox] = useState(null)
   const { user, signOut } = useCurrentUser()
+  // Grid or Instagram-style feed; remembered on this device only.
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'feed' ? 'feed' : 'grid'
+    } catch {
+      return 'grid'
+    }
+  })
+  const chooseView = (v) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      /* private mode: fine, it just won't be remembered */
+    }
+  }
 
   const load = async (before) => {
     const url = new URL(`${API_BASE}/api/field/posts`, window.location.origin)
@@ -60,6 +79,8 @@ export default function FieldPage() {
   }
 
   return (
+    // Stone background with white text; see .field-stone in index.css.
+    <div className="field-stone" style={{ minHeight: 'calc(100vh - 74px)' }}>
     <section className="w-full max-w-7xl mx-auto px-6 py-24">
       <div className="flex items-start justify-between">
         <p
@@ -119,7 +140,10 @@ export default function FieldPage() {
         What we're working on right now, posted by the people doing the work.
       </p>
 
-      <div className="hairline mt-14" />
+      <div className="flex justify-end mt-10">
+        <ViewToggle view={view} onChange={chooseView} />
+      </div>
+      <div className="hairline mt-4" />
 
       <div className="mt-14">
         {loading && <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading…</p>}
@@ -130,15 +154,35 @@ export default function FieldPage() {
           </p>
         )}
         {posts.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
-            {posts.map((post) => (
-              <FieldPostCard
+          <div
+            className={
+              view === 'feed'
+                ? 'max-w-xl mx-auto flex flex-col gap-y-10'
+                : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14'
+            }
+          >
+            {posts.map((post) => {
+              const Card = view === 'feed' ? FeedPostCard : FieldPostCard
+              return (
+              <Card
                 key={post.id}
                 post={post}
                 onOpenImage={setLightbox}
-                footer={<FieldComments key={user?.id || 'anon'} post={post} user={user} />}
+                footer={
+                  <>
+                    {user && (isAdmin(user) || post.user_id === user.id) && (
+                      <FieldPostEditor
+                        post={post}
+                        onSaved={(updated) => setPosts((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))}
+                        onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                      />
+                    )}
+                    <FieldComments key={user?.id || 'anon'} post={post} user={user} />
+                  </>
+                }
               />
-            ))}
+              )
+            })}
           </div>
         )}
         {hasMore && (
@@ -166,10 +210,12 @@ export default function FieldPage() {
 
       {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </section>
+    </div>
   )
 }
 
-export function FieldPostCard({ post, onOpenImage, footer }) {
+// Swipeable photos/videos for one post, with dots when there's more than one.
+function MediaCarousel({ post, onOpenImage, aspect }) {
   const media = post.media || []
   const [index, setIndex] = useState(0)
   const trackRef = useRef(null)
@@ -186,73 +232,89 @@ export function FieldPostCard({ post, onOpenImage, footer }) {
   }
 
   return (
-    <article>
-      <div className="relative" style={{ border: '1px solid rgba(236, 228, 215, 0.08)' }}>
+    <div className="relative" style={{ border: '1px solid rgba(236, 228, 215, 0.08)' }}>
+      <div
+        ref={trackRef}
+        onScroll={onScroll}
+        className="flex overflow-x-auto"
+        style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none' }}
+      >
+        {media.map((m) => (
+          <div
+            key={m.path || m.url}
+            className="shrink-0 w-full"
+            style={{
+              scrollSnapAlign: 'start',
+              aspectRatio: aspect,
+              backgroundColor: 'rgba(236, 228, 215, 0.04)',
+            }}
+          >
+            {m.type === 'video' ? (
+              <video
+                src={m.url}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full"
+                style={{ objectFit: 'cover', backgroundColor: '#000' }}
+              />
+            ) : (
+              <img
+                src={m.url}
+                alt={post.caption || 'Cavalier crew at work'}
+                loading="lazy"
+                onClick={() => onOpenImage?.(m.url)}
+                className="w-full h-full"
+                style={{ objectFit: 'cover', cursor: onOpenImage ? 'zoom-in' : 'default' }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      {media.length > 1 && (
         <div
-          ref={trackRef}
-          onScroll={onScroll}
-          className="flex overflow-x-auto"
-          style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none' }}
+          className="absolute flex gap-1.5"
+          style={{ bottom: '0.75rem', left: '50%', transform: 'translateX(-50%)' }}
         >
-          {media.map((m) => (
-            <div
+          {media.map((m, i) => (
+            <button
               key={m.path || m.url}
-              className="shrink-0 w-full"
+              type="button"
+              aria-label={`Show item ${i + 1} of ${media.length}`}
+              aria-current={i === index ? 'true' : undefined}
+              onClick={() => goTo(i)}
               style={{
-                scrollSnapAlign: 'start',
-                aspectRatio: '4 / 3',
-                backgroundColor: 'rgba(236, 228, 215, 0.04)',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                backgroundColor: i === index ? 'var(--off-white)' : 'rgba(236,228,215,0.4)',
+                boxShadow: '0 0 3px rgba(0,0,0,0.5)',
               }}
-            >
-              {m.type === 'video' ? (
-                <video
-                  src={m.url}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="w-full h-full"
-                  style={{ objectFit: 'cover', backgroundColor: '#000' }}
-                />
-              ) : (
-                <img
-                  src={m.url}
-                  alt={post.caption || 'Cavalier crew at work'}
-                  loading="lazy"
-                  onClick={() => onOpenImage?.(m.url)}
-                  className="w-full h-full"
-                  style={{ objectFit: 'cover', cursor: onOpenImage ? 'zoom-in' : 'default' }}
-                />
-              )}
-            </div>
+            />
           ))}
         </div>
-        {media.length > 1 && (
-          <div
-            className="absolute flex gap-1.5"
-            style={{ bottom: '0.75rem', left: '50%', transform: 'translateX(-50%)' }}
-          >
-            {media.map((m, i) => (
-              <button
-                key={m.path || m.url}
-                type="button"
-                aria-label={`Show item ${i + 1} of ${media.length}`}
-                onClick={() => goTo(i)}
-                style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  backgroundColor: i === index ? 'var(--off-white)' : 'rgba(236,228,215,0.4)',
-                  boxShadow: '0 0 3px rgba(0,0,0,0.5)',
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
+      {media.length > 1 && (
+        <span
+          className="absolute text-xs"
+          aria-hidden="true"
+          style={{ top: '0.6rem', right: '0.6rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+        >
+          {index + 1}/{media.length}
+        </span>
+      )}
+    </div>
+  )
+}
 
+// Grid view: compact card.
+export function FieldPostCard({ post, onOpenImage, footer }) {
+  return (
+    <article>
+      <MediaCarousel post={post} onOpenImage={onOpenImage} aspect="4 / 3" />
       <p
         className="uppercase"
         style={{
@@ -295,6 +357,106 @@ export function FieldPostCard({ post, onOpenImage, footer }) {
       )}
       {footer}
     </article>
+  )
+}
+
+function initials(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return 'C'
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+// Feed view: one post at a time, larger square media, poster up top.
+function FeedPostCard({ post, onOpenImage, footer }) {
+  const name = post.author || 'Cavalier crew'
+  return (
+    <article style={{ paddingBottom: '2.5rem', borderBottom: '1px solid rgba(236,228,215,0.08)' }}>
+      <header className="flex items-center gap-3" style={{ marginBottom: '0.75rem' }}>
+        <span
+          aria-hidden="true"
+          className="flex items-center justify-center shrink-0"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            backgroundColor: 'var(--maroon)',
+            color: 'var(--white)',
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {initials(post.author)}
+        </span>
+        <span className="min-w-0">
+          <span className="block" style={{ color: 'var(--off-white)', fontSize: '0.9rem', fontWeight: 500 }}>
+            {name}
+          </span>
+          {post.location && (
+            <span className="block" style={{ color: 'var(--off-white)', opacity: 0.6, fontSize: '0.75rem' }}>
+              {post.location}
+            </span>
+          )}
+        </span>
+      </header>
+      <MediaCarousel post={post} onOpenImage={onOpenImage} aspect="1 / 1" />
+      {post.caption && (
+        <p style={{ fontSize: '0.92rem', lineHeight: 1.7, color: 'var(--off-white)', marginTop: '0.9rem', whiteSpace: 'pre-line' }}>
+          <span style={{ fontWeight: 500 }}>{name}</span>{' '}
+          <span style={{ opacity: 0.85 }}>{post.caption}</span>
+        </p>
+      )}
+      <p
+        className="uppercase"
+        style={{ color: 'var(--off-white)', opacity: 0.55, letterSpacing: '0.12em', fontSize: '0.65rem', marginTop: '0.6rem' }}
+      >
+        {formatPostDate(post.created_at)}
+      </p>
+      {footer}
+    </article>
+  )
+}
+
+function ViewToggle({ view, onChange }) {
+  const button = (value, label, icon) => (
+    <button
+      type="button"
+      onClick={() => onChange(value)}
+      aria-pressed={view === value}
+      aria-label={label}
+      title={label}
+      className="flex items-center justify-center"
+      style={{
+        width: 40,
+        height: 36,
+        background: view === value ? 'rgba(236,228,215,0.1)' : 'transparent',
+        border: 'none',
+        color: 'var(--off-white)',
+        opacity: view === value ? 1 : 0.6,
+        cursor: 'pointer',
+      }}
+    >
+      {icon}
+    </button>
+  )
+  return (
+    <div role="group" aria-label="Layout" className="flex" style={{ border: '1px solid rgba(236,228,215,0.2)' }}>
+      {button(
+        'grid',
+        'Grid view',
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1" y="1" width="6" height="6" /><rect x="9" y="1" width="6" height="6" />
+          <rect x="1" y="9" width="6" height="6" /><rect x="9" y="9" width="6" height="6" />
+        </svg>
+      )}
+      {button(
+        'feed',
+        'Feed view',
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+          <rect x="2.5" y="1.5" width="11" height="9" /><path d="M2.5 13h11M2.5 15h7" />
+        </svg>
+      )}
+    </div>
   )
 }
 

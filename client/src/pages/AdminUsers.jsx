@@ -6,7 +6,7 @@ const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
 
 const ROLE_HELP = {
-  dev_admin: 'Everything, plus developer tools',
+  dev_admin: 'Everything an admin can do, plus managing the developer account and seeing technical log details',
   admin: 'Admin page, manage users, post, comment',
   poster: 'Post to In the Field and comment',
   user: 'Comment only',

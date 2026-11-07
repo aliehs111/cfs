@@ -209,27 +209,20 @@ export default function ProjectIntake() {
     paddingBottom: '3px',
   }
 
-  const roleButtonStyle = {
-    color: 'var(--off-white)',
-    fontFamily: 'var(--font-body, "DM Sans"), system-ui, sans-serif',
-    fontSize: '14px',
-    fontWeight: 400,
-    letterSpacing: '0.02em',
-    background: 'transparent',
-    border: '1px solid rgba(236,228,215,0.18)',
-    padding: '20px 24px',
-    cursor: 'pointer',
-    textAlign: 'left',
-    transition: 'border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease',
-    width: '100%',
-    lineHeight: 1.4,
-  }
 
   const lastAssistantMessage =
     [...messages].reverse().find((m) => m.role === 'assistant')?.content || ''
 
   return (
     <section className="pt-16 pb-24 px-6 md:px-14 w-full">
+      {/* Screen readers: announce progress and the finished reply (not each streamed word). */}
+      <p className="sr-only" aria-live="polite">
+        {state === STATES.LOADING
+          ? 'Reading your project…'
+          : state === STATES.FOLLOWUP || state === STATES.RESULT
+          ? lastAssistantMessage
+          : ''}
+      </p>
       <div className="max-w-3xl mx-auto">
         {/* Bot check: invisible unless Cloudflare asks this visitor to tick a box. */}
         <div ref={botCheckRef} className="mb-4" />
@@ -289,60 +282,17 @@ export default function ProjectIntake() {
               Which best describes you?
             </p>
 
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
+            <div className="role-options">
+              <RoleOption
+                title="I'm planning a project for our space"
+                detail="Owner, facility manager, or end user"
                 onClick={() => handleStart('owner')}
-                style={roleButtonStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--maroon)'
-                  e.currentTarget.style.color = 'var(--maroon-text)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(236,228,215,0.18)'
-                  e.currentTarget.style.color = 'var(--off-white)'
-                }}
-              >
-                I'm planning a project for our space
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    opacity: 0.55,
-                    marginTop: '4px',
-                    color: 'inherit',
-                  }}
-                >
-                  Owner, facility manager, or end-user decision-maker
-                </span>
-              </button>
-
-              <button
-                type="button"
+              />
+              <RoleOption
+                title="I'm bidding or specifying a project"
+                detail="General contractor, architect, or designer"
                 onClick={() => handleStart('specifier')}
-                style={roleButtonStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--maroon)'
-                  e.currentTarget.style.color = 'var(--maroon-text)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(236,228,215,0.18)'
-                  e.currentTarget.style.color = 'var(--off-white)'
-                }}
-              >
-                I'm bidding or specifying a project
-                <span
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    opacity: 0.55,
-                    marginTop: '4px',
-                    color: 'inherit',
-                  }}
-                >
-                  General contractor, architect, or designer
-                </span>
-              </button>
+              />
             </div>
           </div>
         )}
@@ -363,6 +313,7 @@ export default function ProjectIntake() {
             </p>
 
             <textarea
+              aria-label="Describe your project"
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
               placeholder={
@@ -455,6 +406,7 @@ export default function ProjectIntake() {
               value={followupInput}
               onChange={(e) => setFollowupInput(e.target.value)}
               placeholder="Type your answer..."
+              aria-label="Your answer"
               rows={3}
               style={textareaStyle}
               autoFocus
@@ -546,5 +498,22 @@ export default function ProjectIntake() {
       </div>
       <ContactModal isOpen={contactOpen} onClose={() => setContactOpen(false)} />
     </section>
+  )
+}
+
+// One choice in "Which best describes you?": a hairline row with an arrow.
+// Hover / keyboard focus: a stone wash fades in and the arrow turns maroon.
+// Styles: .role-option in index.css.
+function RoleOption({ title, detail, onClick }) {
+  return (
+    <button type="button" className="role-option" onClick={onClick}>
+      <span>
+        <span className="role-option-title">{title}</span>
+        <span className="role-option-detail">{detail}</span>
+      </span>
+      <span className="role-option-arrow" aria-hidden="true">
+        →
+      </span>
+    </button>
   )
 }

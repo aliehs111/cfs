@@ -3,6 +3,7 @@
 User-agent: *
 Disallow: /admin
 Disallow: /login
+Disallow: /my-alerts
 Disallow: /in-the-field/post
 
 # TODO (specs.md §3): add "Sitemap: https://<domain>/sitemap.xml" once the

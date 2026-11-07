@@ -14,6 +14,7 @@ import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
 import LoginPage from './pages/LoginPage'
+import MyAlertsPage from './pages/MyAlertsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import FieldPage from './pages/FieldPage'
 import FieldPostPage from './pages/FieldPostPage'
@@ -21,7 +22,21 @@ import NotFoundPage from './pages/NotFoundPage'
 
 // Staff-only pages: no chat bubble, no visit tracking.
 const isStaffPath = (path) =>
-  path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/in-the-field/post')
+  path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/my-alerts') || path.startsWith('/in-the-field/post')
+
+// New colour palette, rolled out page by page. Currently: homepage only
+// (including the header and footer while you're on it).
+const NEW_PALETTE_PATHS = ['/']
+
+function PaletteScope() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const root = document.documentElement
+    if (NEW_PALETTE_PATHS.includes(pathname)) root.dataset.palette = '2026'
+    else delete root.dataset.palette
+  }, [pathname])
+  return null
+}
 
 function PageTracker() {
   const location = useLocation()
@@ -64,6 +79,7 @@ export default function App() {
       </a>
       <UpdateBanner />
       <PageTracker />
+      <PaletteScope />
       <Nav />
       <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
         <Routes>
@@ -78,6 +94,7 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/my-alerts" element={<MyAlertsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

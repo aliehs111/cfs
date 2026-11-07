@@ -15,7 +15,8 @@ export default defineConfig([
     ],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      // __APP_VERSION__ is injected at build time by vite.config.js.
+      globals: { ...globals.browser, __APP_VERSION__: 'readonly' },
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
@@ -25,5 +26,10 @@ export default defineConfig([
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
+  },
+  {
+    // Build config runs in Node, not the browser.
+    files: ['vite.config.js', 'eslint.config.js'],
+    languageOptions: { globals: globals.node },
   },
 ])

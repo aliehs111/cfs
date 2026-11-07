@@ -25,7 +25,7 @@ export default function AboutPage() {
             position: 'absolute',
             inset: 0,
             background:
-              'linear-gradient(to bottom, rgba(249,245,239,0) 30%, var(--cream) 100%)',
+              'linear-gradient(to bottom, rgba(249,245,239,0) 40%, rgba(249,245,239,0.25) 60%, rgba(249,245,239,0.62) 78%, rgba(249,245,239,0.9) 91%, var(--cream) 100%)',
           }}
         />
       </div>
@@ -53,7 +53,9 @@ export default function AboutPage() {
             inset: 0,
             zIndex: 1,
             background:
-              'linear-gradient(to right, var(--cream) 0%, rgba(249,245,239,0.95) 30%, rgba(249,245,239,0.6) 60%, rgba(249,245,239,0.2) 100%)',
+              // Solid where the text column overlaps the photo, then an eased
+              // fade so more of the tile shows on the right.
+              'linear-gradient(to right, var(--cream) 0%, rgba(249,245,239,0.98) 12%, rgba(249,245,239,0.9) 22%, rgba(249,245,239,0.72) 34%, rgba(249,245,239,0.48) 50%, rgba(249,245,239,0.24) 70%, rgba(249,245,239,0.08) 100%)',
           }}
         />
       </div>
@@ -84,8 +86,8 @@ export default function AboutPage() {
 
             <div className="hairline-dark mb-10" />
 
-            <p
-              className="font-body mb-20"
+<p
+              className="font-body mb-6"
               style={{
                 color: 'rgba(26,24,22,0.78)',
                 fontSize: '17px',
@@ -93,17 +95,10 @@ export default function AboutPage() {
                 fontWeight: 300,
               }}
             >
-              Cavalier Flooring Systems has been installing commercial floors across Virginia under the same ownership since 1981. We work with general contractors, architects, designers, facility managers, and end-user owners on commercial projects across central Virginia and the Tidewater region.
-            </p>
-
-            <p
-              className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
-            >
-              Sectors
+              Cavalier Flooring Systems has provided commercial flooring installation services throughout Virginia since 1981, working with general contractors, architects, construction managers, and building owners across a wide range of commercial and institutional projects.
             </p>
             <p
-              className="font-body mb-14"
+              className="font-body mb-6"
               style={{
                 color: 'rgba(26,24,22,0.78)',
                 fontSize: '17px',
@@ -111,19 +106,10 @@ export default function AboutPage() {
                 fontWeight: 300,
               }}
             >
-              Healthcare. Retail. Multi-family. Office and corporate. Higher education.
-            </p>
-
-            <div className="hairline-dark mb-14" />
-
-            <p
-              className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
-            >
-              What we install
+              Commercial flooring involves far more than the finished surface. Successful installations begin with an understanding of substrate conditions, moisture, material specifications, and the technical requirements of each flooring system.
             </p>
             <p
-              className="font-body mb-14"
+              className="font-body mb-8"
               style={{
                 color: 'rgba(26,24,22,0.78)',
                 fontSize: '17px',
@@ -131,27 +117,18 @@ export default function AboutPage() {
                 fontWeight: 300,
               }}
             >
-              LVT. VCT. Carpet tile. Sheet vinyl. Ceramic tile.
-            </p>
-
-            <div className="hairline-dark mb-14" />
-
-            <p
-              className="font-body text-xs font-medium tracking-widest uppercase mb-5"
-              style={{ color: 'rgba(26,24,22,0.6)', letterSpacing: '0.16em' }}
-            >
-              Where we work
+              From substrate evaluation and floor preparation to the installation of carpet, resilient flooring, ceramic tile, and specialty flooring systems, Cavalier brings decades of practical experience to every phase of the process.
             </p>
             <p
               className="font-body mb-20"
               style={{
-                color: 'rgba(26,24,22,0.78)',
+                color: 'var(--charcoal)',
                 fontSize: '17px',
                 lineHeight: 1.85,
-                fontWeight: 300,
+                fontWeight: 500,
               }}
             >
-              Charlottesville. Central Virginia up to Fredericksburg. The Tidewater region — Virginia Beach, Norfolk, and the wider Hampton Roads area.
+              The details matter. Especially the ones you never see.
             </p>
 
             <div className="hairline-dark mb-12" />

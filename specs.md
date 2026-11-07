@@ -28,13 +28,13 @@ Features agreed on but not yet built. Each section is meant to be enough context
 **After launch**
 - §2 Share posts to Instagram/LinkedIn
 - §15 Update the Anthropic SDK and models
-- §19 Fix existing lint errors *(small; any time)*
+- ~~§19 Fix existing lint errors~~ ✅ done
 
 ---
 
 ## 1. User accounts, roles and the Admin → Users tab (plus comments on posts)
 
-**Status:** ✅ Built and tested locally Nov 7 2026. Step 1: `app_users`, `/login` (forced password change), Admin → Users tab, roles, `/admin` on accounts (`ADMIN_PASSWORD` removed). Step 2: In the Field posting on accounts (real names, `user_id` on posts, posters edit/delete their own, admins any), public comments with one level of replies (signed-in accounts write; soft delete), `FIELD_PASSWORD` retired. **Remaining:** deploy; then delete `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` and `FIELD_PASSWORD` from Railway.
+**Status:** ✅ Built and tested locally Nov 7 2026. Step 1: `app_users`, `/login` (forced password change), Admin → Users tab, roles, `/admin` on accounts (`ADMIN_PASSWORD` removed). Step 2: In the Field posting on accounts (real names, `user_id` on posts, posters edit/delete their own, admins any), public comments with one level of replies (signed-in accounts write; soft delete), `FIELD_PASSWORD` retired. Deployed Nov 7 2026. **Permissions rule (confirmed by the developer Nov 7 2026): admins can edit or delete anything; posters and users can edit or delete their own posts/comments.** Edit/Delete now appear on every post on the public In the Field feed (owner or admin), post edits cover caption, location and adding/removing photos and videos (removed files deleted from storage), admins can edit any comment (logged with the previous text), and public project pages show an "Edit this project" link to admins that opens Admin → Projects on that project.
 
 ### Goal
 
@@ -42,7 +42,7 @@ Everyone who signs in has their own account with a role. This replaces **both** 
 
 ### Current state (what exists today)
 
-- Public feed: `/in-the-field` → [client/src/pages/FieldPage.jsx](client/src/pages/FieldPage.jsx)
+- Public feed: `/in-the-field` → [client/src/pages/FieldPage.jsx](client/src/pages/FieldPage.jsx) — **Grid / Feed toggle** (Nov 7 2026): grid of cards, or an Instagram-style single column (poster initials + name + location, square swipeable media with an n/total counter, caption led by the poster's name, date, then Edit/Delete and comments). The choice is remembered per device (`localStorage`, key `cavalier_field_view`); grid is the default. **Background (Nov 7 2026):** **graphite sheen**: Stone at the very top falling quickly to near-black `#080808`, a soft metallic glow across the top and a fine grain (`.field-stone` in `client/src/index.css`). Earlier Stone → charcoal and `#52504E` → black versions were replaced. All text on the page is white. Feed page only; the posting page is unchanged.
 - Staff posting page: `/in-the-field/post` → [client/src/pages/FieldPostPage.jsx](client/src/pages/FieldPostPage.jsx). Reached via the faint hard-hat icon on the In the Field page.
 - Backend: [server/routes/field.py](server/routes/field.py)
   - One shared password (`FIELD_PASSWORD` env var on the Railway **server** service) → signed cookie `cavalier_field_session`, 30-day TTL. An admin session is also accepted.
@@ -89,7 +89,7 @@ Railway variable changes only take effect after clicking **Deploy**. Locally, re
 
 | Role | Who | Can |
 |---|---|---|
-| `dev_admin` | The developer only | Everything `admin` can, plus: create/change `dev_admin` accounts, the developer-only System view (see §12) |
+| `dev_admin` | The developer only | Everything `admin` can, plus: grant the `dev_admin` role and edit/reset/deactivate `dev_admin` accounts (admins see that row read-only), and see technical details in the Logs tab (error stack traces; email and IP of failed sign-ins). There is no separate System page. |
 | `admin` | Cavalier management | Everything `poster` can, plus: the whole admin page; create users; change anyone's role **except** to/from `dev_admin`; reset passwords; deactivate/reactivate; delete any post or comment; manage email alert recipients (§4) |
 | `poster` | Crew members and staff who post from job sites | Create In the Field posts; edit/delete **their own** posts; comment |
 | `user` | Staff who follow along but don't post | Comment and reply on posts; edit/delete **their own** comments. Cannot post |
@@ -344,6 +344,10 @@ Not emailed: chat widget conversations (not saved; counted in the digest instead
   - Health: server errors, failed sign-ins, emails that failed to send, spam rejected (§5).
 
 Plain formatting: simple HTML with a plain-text version, no marketing styling. All visitor-typed text is HTML-escaped.
+
+### My email alerts (`/my-alerts`) — built Nov 7 2026
+
+Each admin picks which alerts go to **their own** email, from a page linked in the admin header ("My email alerts"). Contact form and new In the Field posts are shown first as the usual choices; every other alert is available too. Ticking a box adds or removes only that admin's address in the same `notification_settings.recipients` lists the Notifications tab edits. If an admin's email is changed on the Users tab, their subscriptions move to the new address. Admins and dev admins only. Server: `server/routes/my_alerts.py`; page: `client/src/pages/MyAlertsPage.jsx`.
 
 ### Admin → Notifications tab
 
@@ -609,7 +613,7 @@ Then delete the unused `tailwind.config.js`, and review every page because headi
 
 ## 16. Accessibility pass
 
-**Status:** ✅ Done Nov 7 2026. axe-core reports **0 violations** on every public page (desktop and 375px), the signed-in admin tabs, the posting page and the login/password pages. Fixed: contrast (faded text raised to ≥55% on dark / ≥60% on cream; new `--maroon-text: #D9566B` for small maroon text on dark backgrounds, approved by the developer; `--maroon` unchanged for lines, buttons and text on cream); real `<label for>` + autocomplete on the contact form; one `<h1>` per page and no skipped heading levels; labelled admin tab nav with `aria-current`; global keyboard focus ring; "Skip to content" link; `prefers-reduced-motion` support; alert/status roles on form messages; hard-hat icon raised to 3:1. Keyboard-tested: logical tab order, visible focus everywhere. **To keep it passing:** use `--maroon-text` (not `--maroon`) for small text on dark backgrounds, and don't drop text opacity below 0.55 (dark) / 0.6 (cream). Not tested: a real screen reader (VoiceOver) walkthrough — worth 15 minutes before launch.
+**Status:** ✅ Done Nov 7 2026. axe-core reports **0 violations** on every public page (desktop and 375px), the signed-in admin tabs, the posting page and the login/password pages. Fixed: contrast (faded text raised to ≥55% on dark / ≥60% on cream; new `--maroon-text: #D9566B` for small maroon text on dark backgrounds, approved by the developer; `--maroon` unchanged for lines, buttons and text on cream); real `<label for>` + autocomplete on the contact form; one `<h1>` per page and no skipped heading levels; labelled admin tab nav with `aria-current`; global keyboard focus ring; "Skip to content" link; `prefers-reduced-motion` support; alert/status roles on form messages; hard-hat icon raised to 3:1. Keyboard-tested: logical tab order, visible focus everywhere. **To keep it passing:** use `--maroon-text` (not `--maroon`) for small text on dark backgrounds, and don't drop text opacity below 0.55 (dark) / 0.6 (cream). Screen-reader review (Nov 7 2026) via Chrome's accessibility tree, the same data VoiceOver reads: fixed the `/discuss` text boxes (named by their long example placeholder), chat widget (now an announced panel, focus moves into it, finished replies read aloud once), contact pop-up (proper modal dialog: focus moves in, Tab stays inside, focus returns on close), footer nav label, `aria-pressed` on project filters, `*` hidden from screen readers. A quick listen with VoiceOver on an iPhone is still worthwhile, since a tree check can't judge how it sounds.
 
 - **Contrast:** much of the text is off-white at 40–70% opacity on charcoal, plus the faint hard-hat link. Check against WCAG AA (4.5:1 for body text) and raise opacity where it fails.
 - **Keyboard:** every link, button, filter chip, modal, the chat widget, the lightbox, and the mobile menu (section 8) is usable with Tab/Enter/Escape, with a visible focus outline.
@@ -700,7 +704,7 @@ Add a clear section to `knowledge_base.md`. Starting list for the founder to con
 
 ## 19. Fix existing lint errors
 
-**Status:** Not started. Small, low risk; do it in any session.
+**Status:** ✅ Done Nov 7 2026. `npx eslint .` is clean: `__APP_VERSION__` and Node globals declared in `eslint.config.js`; `ContactModal` and `ProjectDetailPage` no longer set state synchronously in effects; earlier fixes in `AdminPage` and `ContactForm`.
 
 `npx eslint src` in `client/` reports 6 errors and 1 warning, all in code from before Nov 2026. The site builds and runs fine; these are React best-practice warnings, but they hide new problems in lint output.
 
@@ -776,3 +780,18 @@ Add a clear section to `knowledge_base.md`. Starting list for the founder to con
 **Costs:** every deploy rebuilds both halves (1–2 min; Railway keeps the old version up until the new one is healthy); a `Dockerfile` (Node build stage → Python image) to maintain; FastAPI must reproduce `client/serve.json`'s caching (`index.html` never cached so the update banner works; hashed assets cached long-term) and the SPA fallback so refreshing a deep link works.
 
 **Plan if done:** build and test locally as one service → add a third Railway service from the same repo using the Dockerfile, copy variables → test on its Railway address while the current two keep serving → retire the old two.
+
+---
+
+## 22. Visual refinements log (Nov 7 2026)
+
+Small, page-by-page refinements approved by the developer. Keep them unless deliberately revisited.
+
+- **Palette (homepage only so far):** `:root[data-palette="2026"]` in `client/src/index.css`, switched on per page by `NEW_PALETTE_PATHS` in `client/src/App.jsx`. Charcoal `#191716`, Warm Gray `#E8E1D7`, Ivory `#F7F3ED`, Stone `#756F6A`. **Maroon stays `#A8243A`** — the proposed `#722638` was tried and rejected (too hard to see on charcoal). Small maroon text on dark backgrounds uses `--maroon-text: #D9566B` everywhere.
+- **About:** photo wash lightened with an eased fade (solid where text overlaps); small labels darker; new copy (three paragraphs + "The details matter. Especially the ones you never see."); Sectors / What we install / Where we work removed.
+- **Contact (form, light theme only):** field underlines 48% charcoal (3:1), labels 75%, focus = maroon underline with a 1px maroon shadow (site focus ring skipped on those fields). The dark pop-up version is unchanged.
+- **In the Field (public feed):** graphite sheen background (Stone at top → near-black, soft top glow, fine grain) with all text white (`.field-stone`). Tried and replaced: Stone → charcoal; `#52504E` → black; brushed-metal and mica-sparkle textures were previewed, graphite sheen chosen.
+- **How can we help? (`/discuss`):**
+  - Role choices are "concept B" hairline rows with an arrow (`.role-option`); hover/focus = stone wash + maroon arrow. Filled stone panels were tried and rejected as too blocky.
+  - Background photo `client/assets/discuss_hero.jpg` (web copy of "Sunlit Modern Industrial Interior.png"), medium filter via `--discuss-photo-*`; top band darker so the "HOW CAN WE HELP?" label keeps full `--maroon-text` (with a faint halo). Small text over the photo raised to ~88%. Contrast measured against the photo's brightest pixels behind each line: all ≥ 4.5:1.
+  - Option text: "Owner, facility manager, or end user".

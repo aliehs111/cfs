@@ -109,8 +109,17 @@ export default function ChatWidget() {
 
   return (
     <div style={{ position: 'fixed', bottom: '28px', right: '28px', zIndex: 1000 }}>
+      {/* Screen readers: read each finished reply once (not every streamed word). */}
+      <p className="sr-only" aria-live="polite">
+        {!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant'
+          ? messages[messages.length - 1].content
+          : ''}
+      </p>
       {open && (
         <div
+          id="chat-panel"
+          role="dialog"
+          aria-label="Chat with Cavalier"
           style={{
             position: 'absolute',
             bottom: '64px',
@@ -223,6 +232,8 @@ export default function ChatWidget() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
               placeholder="Ask a question..."
+              aria-label="Your question"
+              autoFocus
               rows={1}
               style={{
                 flex: 1,
@@ -265,6 +276,8 @@ export default function ChatWidget() {
 
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls="chat-panel"
         style={{
           width: '48px',
           height: '48px',

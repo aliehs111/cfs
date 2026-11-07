@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ContactModal from '../components/ContactModal'
+import { isAdmin, useCurrentUser } from '../lib/auth'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 export default function ProjectDetailPage() {
   const { slug } = useParams()
-  const [project, setProject] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  // Which slug the loaded result belongs to; anything else means "loading".
+  const [result, setResult] = useState({ slug: null, project: null, error: null })
   const [contactOpen, setContactOpen] = useState(false)
+  const { user } = useCurrentUser()
+  const loading = result.slug !== slug
+  const project = loading ? null : result.project
+  const error = loading ? null : result.error
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    setProject(null)
     fetch(`${API_BASE}/api/projects/${slug}`)
       .then((r) => {
         if (r.status === 404) return Promise.reject('not_found')
@@ -23,16 +24,10 @@ export default function ProjectDetailPage() {
         return r.json()
       })
       .then((data) => {
-        if (!cancelled) {
-          setProject(data.project)
-          setLoading(false)
-        }
+        if (!cancelled) setResult({ slug, project: data.project, error: null })
       })
       .catch((reason) => {
-        if (!cancelled) {
-          setError(reason === 'not_found' ? 'not_found' : 'failed')
-          setLoading(false)
-        }
+        if (!cancelled) setResult({ slug, project: null, error: reason === 'not_found' ? 'not_found' : 'failed' })
       })
     return () => {
       cancelled = true
@@ -116,6 +111,15 @@ export default function ProjectDetailPage() {
       >
         ← Back to projects
       </Link>
+      {isAdmin(user) && (
+        <Link
+          to={`/admin?tab=projects&edit=${project.id}`}
+          className="uppercase"
+          style={{ marginLeft: '2rem', color: 'var(--maroon-text)', letterSpacing: '0.14em', fontSize: '0.7rem', textDecoration: 'none', borderBottom: '1px solid rgba(217,86,107,0.4)', paddingBottom: '0.15rem' }}
+        >
+          Edit this project
+        </Link>
+      )}
 
       <p
         className="uppercase"

@@ -35,7 +35,7 @@ export default function Home() {
             inset: 0,
             zIndex: 1,
             background:
-              'linear-gradient(to right, var(--charcoal) 0%, rgba(26,24,22,0.78) 28%, rgba(26,24,22,0.15) 100%)',
+              'linear-gradient(to right, var(--charcoal) 0%, rgba(25,23,22,0.78) 28%, rgba(25,23,22,0.15) 100%)',
           }}
         />
       </div>
@@ -61,7 +61,7 @@ export default function Home() {
             position: 'absolute',
             inset: 0,
             background:
-              'linear-gradient(to bottom, rgba(26,24,22,0) 30%, var(--charcoal) 100%)',
+              'linear-gradient(to bottom, rgba(25,23,22,0) 30%, var(--charcoal) 100%)',
           }}
         />
       </div>

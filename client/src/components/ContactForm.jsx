@@ -89,10 +89,14 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
     }
   }
 
-  const labelColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.6)'
+  const labelColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.75)'
   const fieldColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
-  const fieldUnderline = isDark ? 'rgba(236,228,215,0.15)' : 'rgba(26,24,22,0.15)'
-  const fieldUnderlineFocus = isDark ? 'var(--off-white)' : 'var(--charcoal)'
+  // Light: 3:1 against ivory, the recommended minimum for a field's outline.
+  const fieldUnderline = isDark ? 'rgba(236,228,215,0.15)' : 'rgba(26,24,22,0.48)'
+  const fieldUnderlineFocus = isDark ? 'var(--off-white)' : 'var(--maroon)'
+  // Light: a second 1px of maroon under the line, so focus reads clearly without
+  // changing the field's size.
+  const fieldFocusShadow = isDark ? 'none' : '0 1px 0 0 var(--maroon)'
   const successHeadingColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
   const successBodyColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.65)'
   const indicatorColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.6)'
@@ -154,7 +158,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
   const indicator = indicatorText(leadContext)
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className={`space-y-8${isDark ? '' : ' contact-form-light'}`}>
       <div
         aria-hidden="true"
         style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', overflow: 'hidden' }}
@@ -173,7 +177,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
         <div>
-          <label htmlFor={fid('name')} style={labelStyle}>Name *</label>
+          <label htmlFor={fid('name')} style={labelStyle}>Name <span aria-hidden="true">*</span></label>
           <input
             type="text"
             name="name"
@@ -183,8 +187,14 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
             value={form.name}
             onChange={handleChange}
             style={fieldStyle}
-            onFocus={(e) => (e.target.style.borderBottomColor = fieldUnderlineFocus)}
-            onBlur={(e) => (e.target.style.borderBottomColor = fieldUnderline)}
+            onFocus={(e) => {
+            e.target.style.borderBottomColor = fieldUnderlineFocus
+            e.target.style.boxShadow = fieldFocusShadow
+          }}
+            onBlur={(e) => {
+            e.target.style.borderBottomColor = fieldUnderline
+            e.target.style.boxShadow = 'none'
+          }}
           />
         </div>
         <div>
@@ -197,14 +207,20 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
             value={form.company}
             onChange={handleChange}
             style={fieldStyle}
-            onFocus={(e) => (e.target.style.borderBottomColor = fieldUnderlineFocus)}
-            onBlur={(e) => (e.target.style.borderBottomColor = fieldUnderline)}
+            onFocus={(e) => {
+            e.target.style.borderBottomColor = fieldUnderlineFocus
+            e.target.style.boxShadow = fieldFocusShadow
+          }}
+            onBlur={(e) => {
+            e.target.style.borderBottomColor = fieldUnderline
+            e.target.style.boxShadow = 'none'
+          }}
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor={fid('email')} style={labelStyle}>Email *</label>
+        <label htmlFor={fid('email')} style={labelStyle}>Email <span aria-hidden="true">*</span></label>
         <input
           type="email"
           name="email"
@@ -214,8 +230,14 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
           value={form.email}
           onChange={handleChange}
           style={fieldStyle}
-          onFocus={(e) => (e.target.style.borderBottomColor = fieldUnderlineFocus)}
-          onBlur={(e) => (e.target.style.borderBottomColor = fieldUnderline)}
+          onFocus={(e) => {
+            e.target.style.borderBottomColor = fieldUnderlineFocus
+            e.target.style.boxShadow = fieldFocusShadow
+          }}
+          onBlur={(e) => {
+            e.target.style.borderBottomColor = fieldUnderline
+            e.target.style.boxShadow = 'none'
+          }}
         />
       </div>
 
@@ -229,8 +251,14 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
           value={form.phone}
           onChange={handleChange}
           style={fieldStyle}
-          onFocus={(e) => (e.target.style.borderBottomColor = fieldUnderlineFocus)}
-          onBlur={(e) => (e.target.style.borderBottomColor = fieldUnderline)}
+          onFocus={(e) => {
+            e.target.style.borderBottomColor = fieldUnderlineFocus
+            e.target.style.boxShadow = fieldFocusShadow
+          }}
+          onBlur={(e) => {
+            e.target.style.borderBottomColor = fieldUnderline
+            e.target.style.boxShadow = 'none'
+          }}
         />
       </div>
 
@@ -243,8 +271,14 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
           value={form.message}
           onChange={handleChange}
           style={{ ...fieldStyle, resize: 'none' }}
-          onFocus={(e) => (e.target.style.borderBottomColor = fieldUnderlineFocus)}
-          onBlur={(e) => (e.target.style.borderBottomColor = fieldUnderline)}
+          onFocus={(e) => {
+            e.target.style.borderBottomColor = fieldUnderlineFocus
+            e.target.style.boxShadow = fieldFocusShadow
+          }}
+          onBlur={(e) => {
+            e.target.style.borderBottomColor = fieldUnderline
+            e.target.style.boxShadow = 'none'
+          }}
         />
       </div>
 

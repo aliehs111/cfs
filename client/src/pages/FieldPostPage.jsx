@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FieldPostCard } from './FieldPage'
-import { apiFetch, canPost, isAdmin, readError, useCurrentUser } from '../lib/auth'
+import FieldPostEditor from '../components/FieldPostEditor'
+import { apiFetch, canPost, isAdmin, useCurrentUser } from '../lib/auth'
 import { fileType, prepareImage, putWithProgress } from '../lib/upload'
 
 const LOGIN_PATH = '/login?next=/in-the-field/post'
@@ -218,14 +219,6 @@ function PostManager({ user, onUnauthorized }) {
     }
   }
 
-  const deletePost = async (id) => {
-    if (!window.confirm('Delete this post from the website?')) return
-    const res = await apiFetch(`/api/field/posts/${id}`, { method: 'DELETE' })
-    if (res.status === 401) return onUnauthorized()
-    if (res.ok) setRecent((prev) => prev.filter((p) => p.id !== id))
-    else window.alert(await readError(res, 'Could not delete that post.'))
-  }
-
   const canManage = (post) => isAdmin(user) || post.user_id === user.id
 
   const uploading = status === 'uploading'
@@ -396,10 +389,10 @@ function PostManager({ user, onUnauthorized }) {
                 post={post}
                 footer={
                   canManage(post) ? (
-                    <PostActions
+                    <FieldPostEditor
                       post={post}
-                      onDelete={() => deletePost(post.id)}
                       onSaved={(updated) => setRecent((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))}
+                      onDeleted={(id) => setRecent((prev) => prev.filter((p) => p.id !== id))}
                       onUnauthorized={onUnauthorized}
                     />
                   ) : null
@@ -413,83 +406,3 @@ function PostManager({ user, onUnauthorized }) {
   )
 }
 
-function PostActions({ post, onDelete, onSaved, onUnauthorized }) {
-  const [editing, setEditing] = useState(false)
-  const [caption, setCaption] = useState(post.caption || '')
-  const [location, setLocation] = useState(post.location || '')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const save = async (e) => {
-    e.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      const res = await apiFetch(`/api/field/posts/${post.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ caption, location }),
-      })
-      if (res.status === 401) return onUnauthorized()
-      if (!res.ok) throw new Error(await readError(res, 'Could not save.'))
-      onSaved((await res.json()).post)
-      setEditing(false)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (editing) {
-    return (
-      <form onSubmit={save} className="mt-4">
-        <textarea
-          aria-label="Caption"
-          value={caption}
-          onChange={(e) => setCaption(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          style={{ ...inputStyle, resize: 'vertical' }}
-        />
-        <input
-          aria-label="Location"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          maxLength={200}
-          placeholder="Location"
-          style={inputStyle}
-        />
-        {error && <p className="text-xs mt-3" style={{ color: 'var(--maroon-text)' }}>{error}</p>}
-        <div className="flex gap-6 mt-4">
-          <button type="submit" disabled={busy} className="text-xs uppercase" style={textButton}>
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="text-xs uppercase"
-            style={{ ...textButton, opacity: 0.55, borderBottom: 'none' }}
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    )
-  }
-
-  return (
-    <div className="flex gap-6 mt-4">
-      <button type="button" onClick={() => setEditing(true)} className="text-xs uppercase" style={textButton}>
-        Edit
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="text-xs uppercase"
-        style={{ ...textButton, color: 'var(--maroon-text)', borderBottomColor: 'rgba(168,36,58,0.4)' }}
-      >
-        Delete
-      </button>
-    </div>
-  )
-}

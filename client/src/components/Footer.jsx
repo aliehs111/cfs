@@ -56,7 +56,7 @@ export default function Footer() {
         </div>
 
         {/* nav */}
-        <nav>
+        <nav aria-label="Footer">
           <ul className="flex flex-wrap gap-x-8 gap-y-4">
             {FOOTER_LINKS.map((link) => (
               <li key={link.to}>

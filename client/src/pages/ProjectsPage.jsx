@@ -73,6 +73,7 @@ export default function ProjectsPage() {
               key={type}
               type="button"
               onClick={() => setFilter(type)}
+              aria-pressed={filter === type}
               className={`filter-chip ${filter === type ? 'filter-chip-active' : ''}`}
             >
               {type}

@@ -235,23 +235,65 @@ async def delete_post(post_id: str, staff: dict = Depends(require_poster)):
 class UpdatePostPayload(BaseModel):
     caption: str | None = Field(default=None, max_length=2000)
     location: str | None = Field(default=None, max_length=200)
+    # Optional: the post's photos/videos in order. Existing ones are kept or
+    # dropped (dropped files are deleted); new ones come from /upload-url.
+    media: list[MediaItem] | None = None
 
 
 @router.patch("/field/posts/{post_id}")
 async def update_post(post_id: str, payload: UpdatePostPayload, staff: dict = Depends(require_poster)):
     _check_uuid(post_id, "post")
     sb = get_supabase()
-    res = sb.table(TABLE).select("id, user_id").eq("id", post_id).limit(1).execute()
+    res = sb.table(TABLE).select("id, user_id, author, media").eq("id", post_id).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="post_not_found")
-    if not _can_manage(staff, res.data[0].get("user_id")):
+    existing = res.data[0]
+    if not _can_manage(staff, existing.get("user_id")):
         raise HTTPException(status_code=403, detail="You can only edit your own posts.")
-    changes = {k: v.strip() for k, v in payload.model_dump().items() if v is not None}
+
+    changes: dict = {}
+    for key in ("caption", "location"):
+        value = getattr(payload, key)
+        if value is not None:
+            changes[key] = value.strip()
+
+    removed_paths: list[str] = []
+    if payload.media is not None:
+        if not payload.media:
+            raise HTTPException(status_code=400, detail="A post needs at least one photo or video. Delete the post instead.")
+        if len(payload.media) > MAX_MEDIA_PER_POST:
+            raise HTTPException(status_code=400, detail=f"Up to {MAX_MEDIA_PER_POST} files per post.")
+        current = {m["path"]: m for m in (existing.get("media") or []) if m.get("path")}
+        media = []
+        for item in payload.media:
+            path = item.path.strip()
+            if path in current:
+                media.append(current[path])
+                continue
+            name = path.rsplit("/", 1)[-1]
+            if ".." in path or path.count("/") != 2 or name.rsplit(".", 1)[-1] not in EXTENSIONS.values():
+                raise HTTPException(status_code=400, detail="invalid_media_path")
+            media.append({"path": path, "url": _public_url(path), "type": _media_type(path)})
+        kept = {m["path"] for m in media}
+        removed_paths = [p for p in current if p not in kept]
+        changes["media"] = media
+
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to change.")
     updated = sb.table(TABLE).update(changes).eq("id", post_id).execute().data[0]
+    if removed_paths:
+        try:
+            sb.storage.from_(BUCKET).remove(removed_paths)
+        except Exception:
+            traceback.print_exc()  # the post is already updated; orphans are harmless
+
+    by_other = existing.get("user_id") != staff["id"]
     log_event("field_post.edited", route=f"/api/field/posts/{post_id}", actor_id=staff["id"],
-              entity_type="field_post", entity_id=post_id, metadata=changes)
+              entity_type="field_post", entity_id=post_id,
+              message=f"Edited by {auth.full_name(staff)}" + (f" (post by {existing.get('author') or 'someone else'})" if by_other else ""),
+              metadata={"fields": sorted(changes), "files_removed": len(removed_paths),
+                        "files_now": len(changes.get("media") or existing.get("media") or [])})
+    updated["comments"] = _comments_for([post_id]).get(post_id, [])
     return {"post": updated}
 
 
@@ -358,14 +400,19 @@ class EditCommentPayload(BaseModel):
 @router.patch("/field/comments/{comment_id}")
 async def edit_comment(comment_id: str, payload: EditCommentPayload, user: dict = Depends(require_account)):
     comment = _load_comment(comment_id)
-    if comment["user_id"] != user["id"]:
+    # Authors edit their own; admins can edit anyone's.
+    if not _can_manage(user, comment["user_id"]):
         raise HTTPException(status_code=403, detail="You can only edit your own comments.")
     body = _clean_body(payload.body)
     row = get_supabase().table(COMMENTS).update({"body": body, "edited_at": _now()}) \
         .eq("id", comment_id).execute().data[0]
+    by_other = comment["user_id"] != user["id"]
     log_event("comment.edited", route=f"/api/field/comments/{comment_id}", actor_id=user["id"],
-              entity_type="field_comment", entity_id=comment_id, message=body[:120])
-    return {"comment": _public_comment(row, {user["id"]: auth.full_name(user)})}
+              entity_type="field_comment", entity_id=comment_id,
+              message=(f"Admin edit by {auth.full_name(user)}: " if by_other else "") + body[:120],
+              metadata={"author_id": comment["user_id"], "previous": (comment.get("body") or "")[:500]} if by_other else None)
+    names = _names_for({row["user_id"]})
+    return {"comment": _public_comment(row, names)}
 
 
 @router.delete("/field/comments/{comment_id}")

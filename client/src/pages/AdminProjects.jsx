@@ -74,7 +74,7 @@ function slugify(text) {
     .replace(/-+$/g, '')
 }
 
-export default function AdminProjects({ onUnauthorized }) {
+export default function AdminProjects({ onUnauthorized, initialEditId }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null) // null | 'new' | project
@@ -86,13 +86,16 @@ export default function AdminProjects({ onUnauthorized }) {
         if (res.status === 401 || res.status === 403) return onUnauthorized()
         if (!res.ok) throw new Error(await readError(res, 'Could not load projects.'))
         const json = await res.json()
-        if (!cancelled) setData(json)
+        if (cancelled) return
+        setData(json)
+        const target = initialEditId && json.projects.find((p) => p.id === initialEditId)
+        if (target) setEditing(target)
       })
       .catch((e) => !cancelled && setError(e.message))
     return () => {
       cancelled = true
     }
-  }, [onUnauthorized])
+  }, [onUnauthorized, initialEditId])
 
   if (error) return <p className="font-body text-xs" style={{ color: 'var(--maroon-text)' }}>{error}</p>
   if (!data) return <p className="font-body text-xs" style={{ color: muted }}>Loading...</p>

@@ -5,7 +5,9 @@ Features agreed on but not yet built. Each section is meant to be enough context
 ### Suggested order
 
 **Before launch: these risk losing leads or breaking the site**
-- §4 Email notifications for submissions *(do first)*
+- §4 Email alerts + Admin → Notifications tab, with the §12 `log_event` helper *(do first)*
+- §1 User accounts and roles (replaces both shared passwords), Admin → Users tab, comments *(second)*
+- §12 Logging everywhere + Admin → Logs tab *(third)*
 - §5 Spam protection on forms *(build alongside §4)*
 - ~~§11 `/discuss` prompt aligned with the chatbot knowledge base~~ ✅ done
 - §18 Thorough review of the AI context, so the bots never say something Cavalier wouldn't
@@ -23,21 +25,19 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - §17 Client handoff guide
 
 **After launch**
-- §1 Staff sign-in accounts, comments and replies
 - §2 Share posts to Instagram/LinkedIn
-- §12 Logging and Logs tab
 - §15 Update the Anthropic SDK and models
 - §19 Fix existing lint errors *(small; any time)*
 
 ---
 
-## 1. Staff sign-in accounts for In the Field (posts, comments, replies)
+## 1. User accounts, roles and the Admin → Users tab (plus comments on posts)
 
-**Status:** Not started. Requested Nov 2026.
+**Status:** Planned Nov 2026; design agreed with the developer. **Build second**, after §4 (see Suggested order). Modeled on the EventOps app (`~/dev/eventops`, vipp.eventible.com), which already does this well; port its code where it fits.
 
 ### Goal
 
-Know **who posted what and who replied**. Replace the single shared team password on In the Field with individual sign-in accounts, then add comments and replies on posts.
+Everyone who signs in has their own account with a role. This replaces **both** shared passwords (`ADMIN_PASSWORD` for `/admin`, `FIELD_PASSWORD` for In the Field), so every post, comment and admin action is tied to a real person, and one person can be removed without changing anyone else's password.
 
 ### Current state (what exists today)
 
@@ -51,57 +51,123 @@ Know **who posted what and who replied**. Replace the single shared team passwor
 
 **Problems this fixes:** anyone with the password can post under any name. You can't revoke one person without changing the password for everyone. Anyone can delete anyone's post.
 
-### Scope
+### Troubleshooting sign-in (notes for a crew user guide)
 
-**In:**
-1. **Individual staff accounts.** Invite-only: no public sign-up. Admin adds or removes people by email.
-2. **Posts tied to a real user.** Show the poster's real name on each post; drop the free-text author field.
-3. **Comments and replies on posts**, by signed-in staff. Show names and timestamps.
-4. **Permissions:**
-   - Staff can create posts and comments, and edit or delete **their own**.
-   - Admin role can delete anything and manage users.
-5. Admin panel: a **Team** tab to invite, deactivate, and set the role (staff / admin).
+**Known issue: some phones can't stay signed in.** Noted Nov 2026. Sign-in works on the developer's iPhone, but other people's phones may behave differently.
 
-**Out (for now):**
-- Public (non-staff) comments or accounts. Decided against for now because of spam and moderation burden. Revisit separately if wanted.
-- Notifications (email/push when someone replies). Possible follow-up.
-- Reactions/likes.
+- **Symptom:** the person enters the correct password and briefly sees the posting screen, or nothing happens. Then they're back at the password box, with no error message. Or posting fails and sends them back to the password box.
+- **Cause:** the website (`cavalier-flooring-…up.railway.app`) and the server (`cfs-…up.railway.app`) are on different web addresses. The browser counts the sign-in cookie as a "cross-site" (third-party) cookie, and privacy settings can block those:
+  - **iPhone/iPad (Safari, and Chrome on iOS):** blocked when *Prevent Cross-Site Tracking* is on, which is the default.
+  - **Private/Incognito windows** on any phone or browser.
+  - **Firefox**, and Android Chrome when "Block third-party cookies" is on.
+- **Workaround for a crew member, until it's fixed properly:**
+  - iPhone Safari: Settings → Safari → turn off **Prevent Cross-Site Tracking**. On iOS 18 and later it's Settings → Apps → Safari.
+  - Chrome on iPhone: Settings → Apps → Chrome → turn on **Allow Cross-Website Tracking**.
+  - Don't use a private/incognito tab.
+  - These settings change privacy for every website, so treat this as a stopgap, not the instructions in the final guide.
+- **Permanent fixes (either one):**
+  1. At cutover, put the server on `api.<domain>` and the site on `www.<domain>` (§3 Part D step 2). The cookie is then first-party and isn't blocked.
+  2. The account system in this section sends the sign-in token as an `Authorization: Bearer` header instead of a cookie, which avoids the problem completely. Do the same for the admin login.
 
-### Open decisions (ask the founder before building)
+**Other sign-in messages and what they mean** (for whoever supports the crews):
 
-1. **Are comments public?** Can website visitors *read* staff comments, or are comments internal to the team only?
-2. **Sign-in method:** emailed magic link (recommended — nothing to remember on a job site), Google sign-in, or email + password?
-3. **Reply depth:** replies to a post only, or replies to replies too? A single level of nesting is recommended.
-4. **What happens to the existing posts** whose `author` is free text? Assign them to a user, or leave them as-is with the old name?
-5. Should the existing admin password login move onto the same account system (admin = a user with the admin role)?
+| What the person sees | Meaning | Fix |
+|---|---|---|
+| "Incorrect password." | Wrong password, or the Railway value has a stray space or quotes | Re-share the password; check `FIELD_PASSWORD` on the **cfs-server** service |
+| "Could not sign in." | The server rejected the request or couldn't be reached | Check `FIELD_PASSWORD` exists on **cfs-server** and was deployed. Check `FRONTEND_URL` on cfs-server exactly matches the site's address (`https://…`, no trailing slash). A mismatch here breaks all forms on the site, not just sign-in |
+| "Too many attempts…" | Rate limit: 10 tries per minute per device/network | Wait a minute |
+| Back at the password box, no message | Cookie blocked (see the known issue above) | Workaround above |
 
-### Suggested approach
+Railway variable changes only take effect after clicking **Deploy**. Locally, restart `uvicorn` after editing `server/.env`; `--reload` doesn't watch `.env`.
 
-- **Supabase Auth** for accounts. It's in the same project, handles magic links and email delivery, and needs no extra service.
-  - Turn off public sign-ups in Supabase Auth settings. Admin invites users via the backend (service-role `auth.admin.invite_user_by_email`).
-  - Frontend: add `@supabase/supabase-js` for sign-in and session handling only. Send the user's access token to the FastAPI backend as `Authorization: Bearer …`. The backend verifies the JWT and looks up the user's profile and role.
-  - Keep all database writes going through FastAPI (service-role key, RLS stays on with no public policies). Same pattern as today.
-- **New tables (draft):**
-  - `profiles` — `id` (= auth user id), `full_name`, `role` (`staff` | `admin`), `active` bool, `created_at`
-  - `field_comments` — `id`, `post_id` → `field_posts.id` (on delete cascade), `parent_id` (nullable, for replies), `user_id` → `profiles.id`, `body`, `created_at`, `edited_at`, `deleted_at` (soft delete keeps reply threads intact)
-  - `field_posts` — add `user_id` → `profiles.id`; keep `author` for legacy rows.
-- **Retire** `FIELD_PASSWORD` and the `cavalier_field_session` cookie once accounts are live.
-- The hard-hat entrance stays; it now leads to a sign-in screen instead of the password box.
+### Roles
+
+| Role | Who | Can |
+|---|---|---|
+| `dev_admin` | The developer only | Everything `admin` can, plus: create/change `dev_admin` accounts, the developer-only System view (see §12) |
+| `admin` | Cavalier management | Everything `poster` can, plus: the whole admin page; create users; change anyone's role **except** to/from `dev_admin`; reset passwords; deactivate/reactivate; delete any post or comment; manage email alert recipients (§4) |
+| `poster` | Crew members and staff who post from job sites | Create In the Field posts; edit/delete **their own** posts; comment |
+| `user` | Staff who follow along but don't post | Comment and reply on posts; edit/delete **their own** comments. Cannot post |
+
+Rules (same as EventOps):
+- Nobody can change their own role or deactivate themselves (prevents locking the last admin out).
+- Only a `dev_admin` can grant or remove `dev_admin`.
+- No hard delete of users, only deactivate, so logs can always say who did what.
+
+### Initial accounts
+
+| Name | Email | Role | How it's created |
+|---|---|---|---|
+| CTX 201 | smcgov11.11@gmail.com | `dev_admin` | Automatically at server startup from env vars, if no `dev_admin` exists (EventOps `ensure_dev_admin`) |
+| Sheila McGovern | sheila@cavfloor.com | `admin` | Created by the dev_admin in the Users tab |
+| Nick Basso | nick@cavfloor.com | `admin` | Users tab |
+| Randy Basso | randy@cavfloor.com | `admin` | Users tab |
+
+Server env vars for the bootstrap account: `DEV_ADMIN_NAME`, `DEV_ADMIN_EMAIL`, `DEV_ADMIN_PASSWORD` (temporary; must be changed at first sign-in), plus `SESSION_SECRET` for signing sessions.
+
+### Creating a user (copy EventOps)
+
+1. Admin → **Users** tab → **Add user**: first name, last name, email, role.
+2. Backend rejects an email that already has an account, generates a temporary password like `abcd-EFGH-2345` (no look-alike characters), stores only a scrypt hash, and sets `must_change_password = true`.
+3. The temporary password is shown to the admin **once**.
+4. **Email invite** button opens a pre-written welcome email (`mailto:`) with the sign-in link; **Text invite** opens the phone's share sheet. The password is never put in the invite; the admin gives it to the person separately.
+5. At first sign-in, the backend refuses everything except "change password" (min 10 characters), "who am I" and sign out, until a new password is set.
+
+### Users tab
+
+- Columns: Name, Email, Role (inline dropdown), Status (Active / Deactivated / Must change password), Last signed in, Actions.
+- Actions: edit name/email, change role, **reset password** (new temporary password; signs them out everywhere), **deactivate / reactivate**, email invite, text invite.
+- Every change is written to the activity log (§12) and triggers the "user account changes" alert (§4).
+
+### Sign-in and sessions
+
+- One sign-in page for everyone (`/login`), email + password. After sign-in, admins land on `/admin`, posters on `/in-the-field/post`, users on `/in-the-field`. The hard-hat entrance on In the Field leads to it.
+- Failed attempts throttled per email and per IP (5 per 15 minutes). Unknown emails take as long to check as known ones. Hitting the limit triggers the "repeated failed sign-ins" alert (§4).
+- Session = `user_id.session_version.issued_at` + HMAC-SHA256 signature with `SESSION_SECRET`, 30 days.
+- **Difference from EventOps:** EventOps uses a cookie because its site and API share one address. Cavalier's don't until the domain move (§3 Part D), so a cookie is blocked by iPhone Safari and private windows (see Troubleshooting above). **Send the session as an `Authorization: Bearer` header** and keep it in `localStorage`. Optionally switch to a cookie after the API moves to `api.<domain>`.
+- The backend re-reads the user on every request: deactivated, or `session_version` changed (password reset/deactivation bump it), returns 401 immediately. No sessions table needed.
+
+### Comments and replies
+
+- Signed-in `user`, `poster`, `admin` and `dev_admin` can comment on a post and reply to a comment (one level of replies).
+- Each shows the real name and time. Authors can edit/delete their own; admins can delete any. Soft delete keeps reply threads intact ("comment removed").
+
+### Tables (draft)
+
+- `app_users` — `id`, `first_name`, `last_name`, `email` (unique, lowercased), `role` (check: `dev_admin` | `admin` | `poster` | `user`), `password_hash`, `must_change_password`, `session_version` int, `active` bool, `last_sign_in_at`, `created_at`, `created_by` → `app_users.id`
+- `field_comments` — `id`, `post_id` → `field_posts.id` (on delete cascade), `parent_id` (nullable, for replies), `user_id` → `app_users.id`, `body`, `created_at`, `edited_at`, `deleted_at`
+- `field_posts` — add `user_id` → `app_users.id`. Keep `author` for legacy rows; new posts show the account name and the free-text author field is removed.
+- RLS on with no policies, as today; all access through FastAPI with the service-role key.
+
+### Retire when this ships
+
+- `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, the `cavalier_admin_session` cookie and the admin password screen.
+- `FIELD_PASSWORD`, the `cavalier_field_session` cookie and the field password box.
+- Update the Troubleshooting table above: messages become per-person ("Incorrect email or password", "Account deactivated").
+
+### Open decisions
+
+1. **Are comments public?** Can website visitors read comments on In the Field, or only signed-in accounts? (Recommended: signed-in only to start.)
+2. **Who gets `user` accounts?** Office staff only, or also clients/GCs following a project? Clients would need a closer look at what they can see.
+3. Existing posts with a free-text `author`: leave as-is (recommended), or assign each to an account?
 
 ### Acceptance criteria
 
-- [ ] An uninvited email cannot sign in or create an account.
-- [ ] Each post and comment shows the real name of the signed-in user who created it, not a typed-in name.
-- [ ] Staff can edit/delete only their own posts and comments; admins can delete any.
-- [ ] Deactivating a user blocks them immediately (their next request fails), without affecting anyone else.
-- [ ] Replies display under the comment they answer.
-- [ ] Sign-in and posting work on a phone over a weak signal; the session lasts long enough that crews aren't signing in daily.
-- [ ] Existing posts still display after migration.
+- [ ] There is no public sign-up; only an admin can create an account.
+- [ ] A new user must change the temporary password before doing anything else.
+- [ ] A `user` can comment but gets no Post option (and the API rejects a post from them with 403).
+- [ ] A `poster` can post and edit/delete only their own posts; an `admin` can delete any post or comment.
+- [ ] An `admin` can change roles but cannot grant `dev_admin`, change their own role, or deactivate themselves.
+- [ ] Deactivating or resetting a user signs them out on their next request, without affecting anyone else.
+- [ ] Sign-in works on an iPhone with Prevent Cross-Site Tracking **on**.
+- [ ] Every post and comment shows the account's real name. Existing posts still display.
+- [ ] `ADMIN_PASSWORD` and `FIELD_PASSWORD` can be deleted from Railway and nothing breaks.
 
 ### Related notes
 
-- Project brief, which lists "no public user auth in v1": [CAVALIER_FLOORING_BRIEF.md](CAVALIER_FLOORING_BRIEF.md). This feature is **staff-only** auth, so it doesn't conflict with that.
-- The CORS settings in [server/main.py](server/main.py) will need `PATCH` (or keep using POST/DELETE) and the `Authorization` header allowed. `allow_headers=["*"]` already covers the header.
+- Project brief lists "no public user auth in v1": [CAVALIER_FLOORING_BRIEF.md](CAVALIER_FLOORING_BRIEF.md). These are staff accounts only, so it doesn't conflict.
+- CORS in [server/main.py](server/main.py): add `PATCH` to `allow_methods` if used. `allow_headers=["*"]` already covers `Authorization`.
+- EventOps files to port: `backend/auth.py`, `backend/routers/admin.py`, `frontend/src/pages/Admin.tsx`, `Login.tsx`, `ChangePassword.tsx`, `frontend/src/lib/invite.ts`, `lib/me.ts`, migrations `009` and `016`. EventOps is TypeScript and uses psycopg; Cavalier is JSX and uses the Supabase client, so adapt rather than copy.
 
 ---
 
@@ -223,77 +289,93 @@ The site is a React single-page app: pages are built in the browser by JavaScrip
 
 ---
 
-## 4. Email notifications for website submissions
+## 4. Email alerts and the Admin → Notifications tab
 
-**Status:** Not started. Requested Nov 2026. **High priority: build before launch.** Without it, leads sit in the database until someone happens to check `/admin`.
+**Status:** Planned Nov 2026; scope agreed with the developer. **Build first.** Without it, leads sit in the database until someone happens to check `/admin`.
 
 ### Goal
 
-Every time someone submits something on the website, the right people at Cavalier get an email with the full details, so nobody has to log into the admin panel to find new leads.
+The right people get an email whenever something happens on the site, and admins choose **who gets which alert** on the admin page, without touching Railway or code.
 
-### What triggers an email
+### Alerts
 
-| Submission | Where it's saved today | Email? |
+| Alert | Fires when | Default recipients (editable) |
 |---|---|---|
-| Contact form (`/contact`, and the "Discuss a similar project" / "Let's Talk" modals) | `contacts` table, in [server/routes/contact.py](server/routes/contact.py) | **Yes**, always |
-| Project-intake conversation (`/discuss`) | `project_responses` table, in [server/routes/intake.py](server/routes/intake.py), saved only when the conversation is complete | **Yes**, when it's saved |
-| Chat widget conversations | Not saved | No |
-| In the Field posts | `field_posts` | No (staff content, not leads) |
+| **New contact form** | Contact form submitted (`/contact`, and the "Discuss a similar project" / "Let's Talk" modals) | smcgov11.11@gmail.com |
+| **New project intake** | A `/discuss` conversation completes and is saved | smcgov11.11@gmail.com |
+| **New In the Field post** | A post is created | smcgov11.11@gmail.com |
+| **In the Field post deleted** | A post is deleted (says who deleted it, and includes the caption and media links) | smcgov11.11@gmail.com |
+| **Repeated failed sign-ins** | An email or IP hits the sign-in limit (5 failures / 15 min) on any login | smcgov11.11@gmail.com |
+| **Server error** | Any unhandled error / 500 response | smcgov11.11@gmail.com |
+| **User account changes** | User created, role changed, deactivated/reactivated, password reset, first sign-in completed | smcgov11.11@gmail.com |
+| **Weekly digest** | Monday morning, Eastern time | smcgov11.11@gmail.com |
 
-If a visitor uses `/discuss` and then sends the contact form, they get two emails. That's fine: the contact email already includes the AI exchange (`formatLeadContext()`), and the intake email shows that someone used the tool even if they never got in touch.
+**Starting recipients:** every alert goes only to the developer (smcgov11.11@gmail.com) at first. Later, add sheila@, nick@ and randy@cavfloor.com (or others) to the leads, new-post and digest alerts from the Notifications tab. No code change or deploy is needed.
 
-### What the email contains
+**Throttling** so an attack or outage can't flood inboxes: failed-sign-in alerts at most once per email/IP per hour; server-error alerts at most once per distinct error per hour, with a count of how many times it happened. Everything else sends every time.
 
-**Contact form:**
-- Subject: `New website inquiry: <name> (<company>)`
-- Name, company, email, phone, message, date/time (Eastern time).
-- If the visitor came through the project-intake tool, the attached AI exchange (already part of `message`).
-- **Reply-To set to the visitor's email**, so hitting Reply in the inbox answers them directly.
-- A link to `/admin` for the full history.
+Not emailed: chat widget conversations (not saved; counted in the digest instead), new comments (in the digest; could become its own alert later).
 
-**Project intake:**
-- Subject: `Project intake: <role> — <first ~60 characters of description>`
-- Role (Owner/Facility or GC/Specifier), the visitor's project description, and Claude's final response.
-- Note that this visitor may not have left contact info. The email is a heads-up, not a lead with a name attached.
+### What each email contains
 
-Plain, readable formatting: simple HTML with a plain-text version. No marketing styling.
+- **Contact form.** Subject `New website inquiry: <name> (<company>)`. Name, company, email, phone, message, date/time (Eastern). If they came through the intake tool, the AI exchange (already part of `message`). **Reply-To = the visitor's email**, so Reply answers them directly. Link to `/admin`.
+- **Project intake.** Subject `Project intake: <role> — <first ~60 chars of description>`. Role, description, Claude's final response. Note that the visitor may not have left contact info.
+- **New post.** Subject `New In the Field post by <name>`. Caption, location, first photo as a thumbnail, number of files, link to the post.
+- **Post deleted.** Who deleted it, who originally posted it, caption, date.
+- **Failed sign-ins.** The email tried (and whether it's a real account), the IP, number of attempts, time window.
+- **Server error.** Route, error type and message, time, count within the hour. No visitor personal data.
+- **User account change.** What changed, which account, who did it.
+- **Weekly digest** (last 7 days, with the previous week for comparison):
+  - Visits: total, top pages, top referrers, phone vs desktop.
+  - Leads: each contact submission (name, company, date) and intake count.
+  - In the Field: new posts (with posters' names), new comments.
+  - Chat: conversations started.
+  - Health: server errors, failed sign-ins, emails that failed to send, spam rejected (§5).
+
+Plain formatting: simple HTML with a plain-text version, no marketing styling. All visitor-typed text is HTML-escaped.
+
+### Admin → Notifications tab
+
+- One row per alert: name, short description, **on/off switch**, and the list of recipient emails with add/remove. A **Send test** button sends a sample to that alert's recipients.
+- Recipients don't need accounts (e.g. a shared `estimating@` inbox can receive leads).
+- Visible to `admin` and `dev_admin` (§1). Until §1 ships, it sits behind the current admin password.
+- Changes are written to the activity log (§12).
+
+Table: `notification_settings` — `alert_type` (primary key), `enabled` bool, `recipients` text[], `updated_at`, `updated_by`. Seeded with the defaults above.
 
 ### Approach
 
-- **Email service: [Resend](https://resend.com)** (recommended). Free tier is 3,000 emails/month, which is far more than needed, and it has a simple Python SDK and good deliverability. Alternatives if the founder prefers: Postmark, SendGrid, or sending through Cavalier's existing Google Workspace / Microsoft 365 over SMTP.
-- New helper `server/notify.py` with `send_contact_notification(row)` and `send_intake_notification(row)`.
-- Call it **after** the database insert succeeds, using FastAPI `BackgroundTasks` (or a try/except after the response is built) so that:
-  - the visitor never waits on email, and
-  - **if email fails, the submission still saves and the visitor still sees success.** Print the error to the server log (and write to the `logs` table once logging exists).
-- The intake route streams its response, so send the notification from inside `generate()` right after the `project_responses` insert, wrapped in its own try/except.
-- Escape all user-submitted text in the HTML email.
+- **Sending: SMTP with a Google App Password, the same as EventOps and Clipper.** Port EventOps' `backend/mailer.py` (Python's built-in `smtplib`, no extra package or third-party service). Extend it to send to a list of recipients, and to send HTML with a plain-text version. Gmail's limit (~500 recipients/day) is far more than needed. `SMTP_HOST`/`SMTP_PORT` are variables, so it can later point at Cavalier's own mail provider instead of Gmail without code changes.
+- `server/mailer.py` (ported) does the sending; `server/notify.py`: `send_alert(alert_type, subject, html, text, reply_to=None)` looks up `notification_settings`, skips if disabled or no recipients, sends, and logs the result (§12).
+- Call it **after** the database write succeeds, using FastAPI `BackgroundTasks`, so the visitor never waits on email and **if email fails, the submission still saves and the visitor still sees success.** The intake route streams, so send from inside `generate()` right after the insert, in its own try/except.
+- Server errors: a middleware/exception handler that logs every 500 (§12) and calls the throttled alert.
+- **Weekly digest:** a small script (`server/jobs/weekly_digest.py`) run by a **Railway cron job** service using the same code and variables as cfs-server. Railway cron runs in UTC: Mondays at 12:00 UTC is 7am EST / 8am EDT. Built from the `logs` table, so it depends on §12's page-visit logging.
 
-### Configuration (Railway **server** service variables)
+### Configuration (Railway **cfs-server** service variables)
 
-- `RESEND_API_KEY`
-- `NOTIFY_EMAIL_TO`: comma-separated list of who gets the emails (ask founder)
-- `NOTIFY_EMAIL_FROM`: e.g. `Cavalier Website <website@<domain>>`
+- `SMTP_USER`: the Gmail address that sends the alerts
+- `SMTP_PASS`: its Google App Password (Google Account → Security → 2-Step Verification → App passwords). Not the normal Gmail password.
+- `SMTP_FROM` (optional): display name and address, e.g. `Cavalier Website <that-gmail-address>`. Gmail sends only as the signed-in address or a verified alias.
+- `SMTP_HOST` / `SMTP_PORT` (optional): default `smtp.gmail.com` / `587`.
+- Without `SMTP_USER`/`SMTP_PASS`, alerts are skipped and logged, and everything else still works (same as EventOps).
+- Recipients are **not** env vars; they live in `notification_settings` and are edited on the admin page.
 
-### Sending domain (ties to section 3)
+### Sender address
 
-- To send *from* Cavalier's own domain, the domain must be verified in Resend by adding a few DNS records (SPF/DKIM). **Add these alongside the existing email records; don't replace them.** Check the existing SPF record first, because a domain can only have one SPF record and Resend's include may need to be merged into it.
-- Until the domain is moved off Hibu and DNS is in Cavalier's hands, either verify a subdomain you control or use Resend's test sender (`onboarding@resend.dev`, which can only send to the Resend account owner's address). That's enough for development and testing.
-
-### Open decisions (ask the founder)
-
-1. Who should receive the emails? One address, a shared inbox (e.g. `estimating@`), or several people?
-2. Same recipients for contact-form leads and intake-tool emails, or different?
-3. Should the visitor also get an automatic "Thanks, we got your message" confirmation email? (Not in scope unless requested.)
-4. Which email service: Resend (recommended), or Cavalier's existing email provider?
+- Alerts come from the Gmail account in `SMTP_USER`; Reply-To on contact-form alerts is still the visitor.
+- Decide which account sends: the developer's Gmail (as in EventOps), or a Cavalier-owned account so alerts keep working if the developer arrangement ends (§7). Switching later is only a variable change.
+- No DNS changes are needed, so this doesn't wait on the domain move (§3).
 
 ### Acceptance criteria
 
-- [ ] Submitting the contact form sends an email to every address in `NOTIFY_EMAIL_TO` within a minute, with all fields filled in.
-- [ ] Replying to that email goes to the visitor's address, not the website's.
-- [ ] Completing a `/discuss` conversation sends an intake email containing the description and Claude's response.
-- [ ] If the email service is down or misconfigured, the submission still saves, the visitor still sees success, and the error appears in the server logs.
-- [ ] Emails land in the inbox, not spam (check Gmail and Outlook), once the sending domain is verified.
-- [ ] Text a visitor types that contains HTML (e.g. `<script>`) shows up as plain text in the email.
+- [ ] Each alert type sends to exactly the recipients set on the Notifications tab, within a minute; turning an alert off stops it.
+- [ ] Send test works for every alert.
+- [ ] Replying to a contact-form email goes to the visitor.
+- [ ] If email is down or not configured, submissions and posts still save, the visitor still sees success, and the failure appears in the Logs tab.
+- [ ] 50 failed sign-ins in a row produce one alert, not 50. A repeating server error produces at most one email per hour.
+- [ ] The weekly digest arrives Monday morning with last week's numbers.
+- [ ] Text a visitor types that contains HTML (e.g. `<script>`) shows up as plain text.
+- [ ] Emails land in the inbox, not spam, at cavfloor.com and Gmail addresses.
 
 ---
 
@@ -338,7 +420,7 @@ The site depends on these accounts. For each, decide **who owns it** (Cavalier o
 | Railway | Hosts frontend and backend | ~$5–20/mo depending on usage |
 | Supabase | Database + file storage | Free, or $25/mo Pro (see section 6) |
 | Anthropic | Chat widget + `/discuss` AI | Usage-based; likely a few $/mo at this traffic |
-| Resend (section 4) | Lead emails | Free at this volume |
+| Gmail SMTP (section 4) | Email alerts | Free |
 | Cloudflare Turnstile (section 5) | Spam protection | Free |
 
 Recommendations:
@@ -411,15 +493,55 @@ The `/discuss` system prompt in [server/routes/intake.py](server/routes/intake.p
 
 ## 12. Logging and the Admin → Logs tab
 
-**Status:** Not started. From the original brief (step 11). The `logs` table exists but nothing writes to it, and `/api/track/visit` is a stub that returns 204 without saving.
+**Status:** Planned Nov 2026; scope expanded with the developer. The `logs` table exists but nothing writes to it, and `/api/track/visit` is a stub that returns 204 without saving. Build the `log_event` helper **with §4** (alerts log their sends), and the Logs tab after §1.
 
-**Build:**
-- `server/logger.py` with `log_event(level, event, route, message, metadata)` (see CTX201's implementation, per the brief). Logging must never break a request: wrap the insert in try/except.
-- Record: page visits (path, referrer, rough device type; **no IP addresses stored**), contact submissions, intake completions, chat usage counts, rate-limit hits, email-send failures (section 4), spam rejections (section 5), and server errors.
-- **Admin → Logs tab:** filter by level and event, newest first, plus simple counts (visits per page this week, leads this month).
-- Auto-delete logs older than ~90 days to keep the database small.
+### Goal
 
-**Done when:** visiting pages and submitting forms produce rows visible in the Logs tab, and a forced error shows up as `level=error`.
+Log everything worth knowing in one place, stored in the database so it survives deploys (EventOps keeps timings and errors only in memory; don't copy that part):
+
+- **Activity: who did what.** Like EventOps' `activity_log`.
+- **Site events:** what visitors and the system did.
+
+### What gets logged
+
+| Category | Events |
+|---|---|
+| Visits | Page views: path, referrer, device type (phone/tablet/desktop), browser. **No IP addresses stored.** |
+| Leads | Contact submitted, intake started, intake completed |
+| Chat | Conversation started, message count (not the message text) |
+| In the Field | Post created/edited/deleted, comment created/edited/deleted |
+| Accounts (§1) | Signed in, sign-in failed (email tried, whether it exists), password changed, user created, role changed, deactivated/reactivated, password reset |
+| Admin | Notification settings changed, project created/edited/deleted (§10) |
+| Email (§4) | Alert sent (type, recipient count), alert failed (error) |
+| Protection | Rate limit hit (route), spam rejected (§5) |
+| Errors | Every 500 / unhandled exception: route, error type, message, stack trace in `metadata` |
+
+### Table changes
+
+Add to the existing `logs` table: `actor_id` → `app_users.id` (null for visitors and the system), `entity_type`, `entity_id` (e.g. `field_post`, `<uuid>`). Keep `level` (`info` | `warning` | `error`), `event` (e.g. `field_post.deleted`), `route`, `message`, `metadata`. Index on `created_at desc` and on `event`.
+
+### Build
+
+- `server/logger.py` with `log_event(level, event, *, actor=None, route=None, message=None, entity=None, metadata=None)`. It must **never break a request**: wrap the insert in try/except, and write in the background where possible.
+- Wire up `/api/track/visit` (already called by the client) to record page views.
+- Middleware for errors (shared with the §4 server-error alert).
+- Delete logs older than **90 days** (in the weekly digest job, or a Supabase scheduled function).
+
+### Admin → Logs tab
+
+- Newest first, paginated. Filter by category, level, person, and date range; search the message text.
+- Each row: time (Eastern), who (name or "visitor"/"system"), what, and a link to the thing it's about (post, user) when it still exists. Expand a row to see `metadata`.
+- Summary cards at the top: visits this week, leads this month, posts this month, errors in the last 24 hours.
+- Visible to `admin` and `dev_admin`. Error stack traces and failed-sign-in details are shown to `dev_admin` only (the EventOps "System" view).
+
+### Acceptance criteria
+
+- [ ] Visiting pages, submitting forms, posting, and signing in all produce rows in the Logs tab with the right person attached.
+- [ ] A forced error shows up as `level=error` with its stack trace (dev_admin only).
+- [ ] If the logs insert fails, the original request still succeeds.
+- [ ] No IP addresses are stored for page visits.
+- [ ] Rows older than 90 days are removed automatically.
+- [ ] The weekly digest (§4) numbers match the Logs tab for the same week.
 
 ---
 

@@ -5,6 +5,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from limiter import limiter
+from logger import log_event
+from notify import report_server_error
 
 router = APIRouter()
 
@@ -37,6 +39,10 @@ async def chat(request: Request, payload: ChatPayload):
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
+    user_turns = sum(1 for m in payload.messages if m.role == "user")
+    log_event("chat.started" if user_turns <= 1 else "chat.message", route="/api/chat",
+              metadata={"turn": user_turns})
+
     def generate():
         try:
             with client.messages.stream(
@@ -51,12 +57,14 @@ async def chat(request: Request, payload: ChatPayload):
                     yield text
         except anthropic.APIStatusError as e:
             err = str(e)
+            report_server_error("POST /api/chat (AI)", f"{type(e).__name__}: {err[:300]}")
             if "credit" in err.lower() or "billing" in err.lower():
                 yield "__CREDITS_EXHAUSTED__"
             else:
                 yield "__SERVICE_ERROR__"
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            report_server_error("POST /api/chat (AI)", f"{type(e).__name__}: {e}", traceback.format_exc())
             yield "__SERVICE_ERROR__"
 
     return StreamingResponse(generate(), media_type="text/plain")

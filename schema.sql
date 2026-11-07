@@ -152,3 +152,37 @@ values (
   array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
 )
 on conflict (id) do nothing;
+
+-- =========================================================
+-- EMAIL ALERTS + LOGGING (added Nov 2026, specs.md §4 and §12) — run this
+-- block on its own in the Supabase SQL Editor if the tables above exist.
+-- =========================================================
+
+-- Who did it, and what it was about. actor_id will reference app_users once
+-- user accounts exist (§1); until then it stays empty.
+alter table logs add column if not exists actor_id uuid;
+alter table logs add column if not exists entity_type text;
+alter table logs add column if not exists entity_id text;
+create index if not exists logs_event_idx on logs (event);
+
+-- 6. Email alerts: on/off and recipients per alert, edited on Admin → Notifications.
+create table if not exists notification_settings (
+  alert_type text primary key,
+  enabled boolean not null default true,
+  recipients text[] not null default '{}',
+  updated_at timestamptz default now(),
+  updated_by text
+);
+alter table notification_settings enable row level security;
+
+-- Starting recipients: the developer only. Add others on the Notifications tab.
+insert into notification_settings (alert_type, enabled, recipients) values
+  ('contact_submission', true, array['smcgov11.11@gmail.com']),
+  ('intake_completed',   true, array['smcgov11.11@gmail.com']),
+  ('field_post_created', true, array['smcgov11.11@gmail.com']),
+  ('field_post_deleted', true, array['smcgov11.11@gmail.com']),
+  ('failed_logins',      true, array['smcgov11.11@gmail.com']),
+  ('server_error',       true, array['smcgov11.11@gmail.com']),
+  ('user_changes',       true, array['smcgov11.11@gmail.com']),
+  ('weekly_digest',      true, array['smcgov11.11@gmail.com'])
+on conflict (alert_type) do nothing;

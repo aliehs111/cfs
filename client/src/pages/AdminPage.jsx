@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import AdminNotifications from './AdminNotifications'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-const TABS = { SUBMISSIONS: 'submissions', INTAKES: 'intakes' }
+const TABS = { SUBMISSIONS: 'submissions', INTAKES: 'intakes', NOTIFICATIONS: 'notifications' }
 
 const ROLE_LABELS = {
   owner: 'Owner / Facility',
@@ -69,6 +70,8 @@ export default function AdminPage() {
       setLoading(false)
     }
   }
+
+  const handleUnauthorized = useCallback(() => setAuthed(false), [])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -189,10 +192,11 @@ export default function AdminPage() {
         {authed === true && (
           <div>
             <div className="flex items-center justify-between mb-12">
-              <nav className="flex gap-8">
+              <nav className="flex flex-wrap gap-x-8 gap-y-3">
                 {Object.entries({
                   [TABS.SUBMISSIONS]: 'Submissions',
                   [TABS.INTAKES]: 'Project Intakes',
+                  [TABS.NOTIFICATIONS]: 'Notifications',
                 }).map(([key, label]) => (
                   <button
                     key={key}
@@ -375,6 +379,10 @@ export default function AdminPage() {
                   })}
                 </div>
               </>
+            )}
+
+            {tab === TABS.NOTIFICATIONS && (
+              <AdminNotifications onUnauthorized={handleUnauthorized} />
             )}
 
             {tab === TABS.INTAKES && !loading && (

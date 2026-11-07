@@ -5,6 +5,8 @@ import anthropic
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from logger import log_event
+from notify import alert, eastern_now, render, report_server_error, site_url
 from supabase_client import get_supabase
 
 router = APIRouter()
@@ -96,6 +98,9 @@ WRONG (questions — never use this style on the final turn):
 End your response with a period. If you catch yourself about to write a question mark, rephrase as a discussion point first."""
 
 
+ROLE_LABELS = {"owner": "Owner / Facility", "specifier": "GC / Specifier"}
+
+
 class IntakeMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -137,6 +142,9 @@ async def project_intake(payload: IntakePayload):
 
     messages = [{"role": m.role, "content": m.content} for m in payload.messages]
 
+    if n == 1:
+        log_event("intake.started", route="/api/project-intake", metadata={"role": payload.role})
+
     def generate():
         full_text = ""
         try:
@@ -151,13 +159,16 @@ async def project_intake(payload: IntakePayload):
                     yield text
         except anthropic.APIStatusError as e:
             err = str(e)
+            report_server_error("POST /api/project-intake (AI)", f"{type(e).__name__}: {err[:300]}")
             if "credit" in err.lower() or "billing" in err.lower():
                 yield "__CREDITS_EXHAUSTED__"
                 return
             yield "__SERVICE_ERROR__"
             return
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            report_server_error("POST /api/project-intake (AI)", f"{type(e).__name__}: {e}",
+                                traceback.format_exc())
             yield "__SERVICE_ERROR__"
             return
 
@@ -167,13 +178,31 @@ async def project_intake(payload: IntakePayload):
 
         if is_complete and full_text.strip():
             try:
-                supabase = get_supabase()
-                supabase.table("project_responses").insert({
+                res = get_supabase().table("project_responses").insert({
                     "project_description": first_user_msg,
                     "ai_output": full_text,
                     "role": payload.role,
                 }).execute()
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
+                report_server_error("POST /api/project-intake (save)", f"{type(e).__name__}: {e}")
+                return
+
+            intake_id = (res.data or [{}])[0].get("id")
+            role_label = ROLE_LABELS.get(payload.role, "Not given")
+            log_event("intake.completed", route="/api/project-intake", entity_type="project_response",
+                      entity_id=intake_id, metadata={"role": payload.role, "turns": n})
+            preview = " ".join(first_user_msg.split())[:60]
+            text, html = render(
+                "New project intake",
+                [("Visitor", role_label), ("Received", eastern_now())],
+                [
+                    ("What they described", first_user_msg),
+                    ("Cavalier's reply (AI)", full_text.strip()),
+                ],
+                link=("Open the admin page", site_url("/admin")),
+                footer="This visitor may not have left contact details. If they also send the contact form, that arrives as a separate email.",
+            )
+            alert("intake_completed", f"Project intake: {role_label} — {preview}", text, html)
 
     return StreamingResponse(generate(), media_type="text/plain")

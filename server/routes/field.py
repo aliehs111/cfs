@@ -24,7 +24,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from limiter import limiter
+from limiter import client_ip, limiter
+from logger import log_event
+from notify import alert, eastern_now, record_login_failure, render, site_url
 from routes.admin import _is_production, _signing_key, _verify_token as _verify_admin_token
 from supabase_client import get_supabase
 
@@ -94,7 +96,9 @@ class LoginPayload(BaseModel):
 @limiter.limit("10/minute")
 async def field_login(request: Request, payload: LoginPayload, response: Response):
     if not hmac.compare_digest(payload.password.encode(), _field_password().encode()):
+        record_login_failure("field", client_ip(request), "/api/field/login")
         raise HTTPException(status_code=401, detail="unauthorized")
+    log_event("auth.signed_in", route="/api/field/login", metadata={"login": "field"})
     response.set_cookie(
         key=COOKIE_NAME,
         value=_make_token(),
@@ -217,7 +221,35 @@ async def create_post(
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"post_create_failed: {type(exc).__name__}")
-    return {"post": (res.data or [row])[0]}
+
+    post = (res.data or [row])[0]
+    _post_created_alert(post, media)
+    return {"post": post}
+
+
+def _post_created_alert(post: dict, media: list[dict]) -> None:
+    author = post.get("author") or "someone on the team"
+    photos = sum(1 for m in media if m["type"] == "image")
+    videos = len(media) - photos
+    counts = ", ".join(
+        f"{n} {label}{'s' if n != 1 else ''}" for n, label in ((photos, "photo"), (videos, "video")) if n
+    )
+    thumb = next((m["url"] for m in media if m["type"] == "image"), None)
+    log_event("field_post.created", route="/api/field/posts", entity_type="field_post",
+              entity_id=post.get("id"), message=f"By {author}: {counts}")
+    text, html = render(
+        f"New In the Field post by {author}",
+        [
+            ("Posted by", post.get("author")),
+            ("Location", post.get("location")),
+            ("Files", counts),
+            ("Posted", eastern_now()),
+        ],
+        [("Caption", post.get("caption"))],
+        link=("See it on In the Field", site_url("/in-the-field")),
+        image_url=thumb,
+    )
+    alert("field_post_created", f"New In the Field post by {author}", text, html)
 
 
 @router.delete("/field/posts/{post_id}")
@@ -234,10 +266,17 @@ async def delete_post(
 
     supabase = get_supabase()
     try:
-        res = supabase.table(TABLE).select("media").eq("id", post_id).limit(1).execute()
+        res = (
+            supabase.table(TABLE)
+            .select("media, caption, location, author, created_at")
+            .eq("id", post_id)
+            .limit(1)
+            .execute()
+        )
         if not res.data:
             raise HTTPException(status_code=404, detail="post_not_found")
-        paths = [m["path"] for m in (res.data[0].get("media") or []) if m.get("path")]
+        deleted = res.data[0]
+        paths = [m["path"] for m in (deleted.get("media") or []) if m.get("path")]
         supabase.table(TABLE).delete().eq("id", post_id).execute()
     except HTTPException:
         raise
@@ -251,6 +290,26 @@ async def delete_post(
         except Exception:
             # Post is already gone from the site; orphaned files are harmless.
             traceback.print_exc()
+
+    # Until user accounts exist (§1), all we know is which password was used.
+    deleted_by = "an admin" if _verify_admin_token(cavalier_admin_session) else "someone signed in to In the Field"
+    log_event("field_post.deleted", route=f"/api/field/posts/{post_id}", entity_type="field_post",
+              entity_id=post_id, message=f"Deleted by {deleted_by}",
+              metadata={"author": deleted.get("author"), "caption": (deleted.get("caption") or "")[:200]})
+    created = deleted.get("created_at") or ""
+    text, html = render(
+        "An In the Field post was deleted",
+        [
+            ("Deleted by", deleted_by),
+            ("Originally posted by", deleted.get("author")),
+            ("Originally posted", created[:10]),
+            ("Location", deleted.get("location")),
+            ("Files removed", str(len(paths))),
+            ("Deleted", eastern_now()),
+        ],
+        [("Caption", deleted.get("caption"))],
+    )
+    alert("field_post_deleted", f"In the Field post deleted ({deleted.get('author') or 'no name'})", text, html)
     return {"status": "ok"}
 
 

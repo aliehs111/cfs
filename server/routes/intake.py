@@ -1,12 +1,15 @@
 import os
+import threading
 import traceback
 from typing import Literal, Optional
+from uuid import UUID
 import anthropic
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from logger import log_event
-from notify import alert, eastern_now, render, report_server_error, site_url
+from intake_store import save_turn
+from notify import report_server_error
 from supabase_client import get_supabase
 
 router = APIRouter()
@@ -98,9 +101,6 @@ WRONG (questions — never use this style on the final turn):
 End your response with a period. If you catch yourself about to write a question mark, rephrase as a discussion point first."""
 
 
-ROLE_LABELS = {"owner": "Owner / Facility", "specifier": "GC / Specifier"}
-
-
 class IntakeMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -109,6 +109,8 @@ class IntakeMessage(BaseModel):
 class IntakePayload(BaseModel):
     messages: list[IntakeMessage]
     role: Optional[Literal["owner", "specifier"]] = None
+    # Sent by the page so every turn updates one saved conversation.
+    conversation_id: Optional[UUID] = None
 
 
 @router.post("/project-intake")
@@ -172,37 +174,21 @@ async def project_intake(payload: IntakePayload):
             yield "__SERVICE_ERROR__"
             return
 
+        if not full_text.strip():
+            return
         ends_with_question = full_text.strip().endswith("?")
         is_final_turn = n >= 5
         is_complete = is_final_turn or not ends_with_question
-
-        if is_complete and full_text.strip():
-            try:
-                res = get_supabase().table("project_responses").insert({
-                    "project_description": first_user_msg,
-                    "ai_output": full_text,
-                    "role": payload.role,
-                }).execute()
-            except Exception as e:
-                traceback.print_exc()
-                report_server_error("POST /api/project-intake (save)", f"{type(e).__name__}: {e}")
-                return
-
-            intake_id = (res.data or [{}])[0].get("id")
-            role_label = ROLE_LABELS.get(payload.role, "Not given")
-            log_event("intake.completed", route="/api/project-intake", entity_type="project_response",
-                      entity_id=intake_id, metadata={"role": payload.role, "turns": n})
-            preview = " ".join(first_user_msg.split())[:60]
-            text, html = render(
-                "New project intake",
-                [("Visitor", role_label), ("Received", eastern_now())],
-                [
-                    ("What they described", first_user_msg),
-                    ("Cavalier's reply (AI)", full_text.strip()),
-                ],
-                link=("Open the admin page", site_url("/admin")),
-                footer="This visitor may not have left contact details. If they also send the contact form, that arrives as a separate email.",
-            )
-            alert("intake_completed", f"Project intake: {role_label} — {preview}", text, html)
+        # Save on a background thread so the visitor's response finishes right away.
+        threading.Thread(
+            target=save_turn,
+            args=(
+                str(payload.conversation_id) if payload.conversation_id else None,
+                payload.role,
+                messages + [{"role": "assistant", "content": full_text}],
+                is_complete,
+            ),
+            daemon=True,
+        ).start()
 
     return StreamingResponse(generate(), media_type="text/plain")

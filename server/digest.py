@@ -89,6 +89,7 @@ def build_digest(now: datetime | None = None) -> tuple[str, str, str]:
         ("Project intakes", _change(len(intakes), len(intakes_prev))),
         ("Chat conversations", _change(count(this_week, "chat.started"), count(last_week, "chat.started"))),
         ("In the Field posts", str(len(posts))),
+        ("New comments", str(count(this_week, "comment.created"))),
     ]
 
     def lines(counter: Counter, n=5):

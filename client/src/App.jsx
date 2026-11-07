@@ -13,12 +13,14 @@ import DiscussPage from './pages/DiscussPage'
 import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
+import LoginPage from './pages/LoginPage'
 import FieldPage from './pages/FieldPage'
 import FieldPostPage from './pages/FieldPostPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 // Staff-only pages: no chat bubble, no visit tracking.
-const isStaffPath = (path) => path.startsWith('/admin') || path.startsWith('/in-the-field/post')
+const isStaffPath = (path) =>
+  path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/in-the-field/post')
 
 function PageTracker() {
   const location = useLocation()
@@ -70,6 +72,7 @@ export default function App() {
           <Route path="/in-the-field/post" element={<FieldPostPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

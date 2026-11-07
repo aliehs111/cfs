@@ -33,7 +33,7 @@ Features agreed on but not yet built. Each section is meant to be enough context
 
 ## 1. User accounts, roles and the Admin → Users tab (plus comments on posts)
 
-**Status:** Planned Nov 2026; design agreed with the developer. **Build second**, after §4 (see Suggested order). Modeled on the EventOps app (`~/dev/eventops`, vipp.eventible.com), which already does this well; port its code where it fits.
+**Status:** ✅ Built and tested locally Nov 7 2026. Step 1: `app_users`, `/login` (forced password change), Admin → Users tab, roles, `/admin` on accounts (`ADMIN_PASSWORD` removed). Step 2: In the Field posting on accounts (real names, `user_id` on posts, posters edit/delete their own, admins any), public comments with one level of replies (signed-in accounts write; soft delete), `FIELD_PASSWORD` retired. **Remaining:** deploy; then delete `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` and `FIELD_PASSWORD` from Railway.
 
 ### Goal
 
@@ -53,7 +53,9 @@ Everyone who signs in has their own account with a role. This replaces **both** 
 
 ### Troubleshooting sign-in (notes for a crew user guide)
 
-**Known issue: some phones can't stay signed in.** Noted Nov 2026. Sign-in works on the developer's iPhone, but other people's phones may behave differently.
+**✅ Resolved Nov 7 2026:** accounts send the session as an `Authorization` header instead of a cookie, so Safari's cross-site tracking setting no longer matters. The notes below are kept for history only.
+
+~~**Known issue: some phones can't stay signed in.**~~ Noted Nov 2026. Sign-in works on the developer's iPhone, but other people's phones may behave differently.
 
 - **Symptom:** the person enters the correct password and briefly sees the posting screen, or nothing happens. Then they're back at the password box, with no error message. Or posting fails and sends them back to the password box.
 - **Cause:** the website (`cavalier-flooring-…up.railway.app`) and the server (`cfs-…up.railway.app`) are on different web addresses. The browser counts the sign-in cookie as a "cross-site" (third-party) cookie, and privacy settings can block those:
@@ -69,14 +71,16 @@ Everyone who signs in has their own account with a role. This replaces **both** 
   1. At cutover, put the server on `api.<domain>` and the site on `www.<domain>` (§3 Part D step 2). The cookie is then first-party and isn't blocked.
   2. The account system in this section sends the sign-in token as an `Authorization: Bearer` header instead of a cookie, which avoids the problem completely. Do the same for the admin login.
 
-**Other sign-in messages and what they mean** (for whoever supports the crews):
+**Sign-in messages and what they mean** (everyone signs in at `/login` with their own account since Nov 2026):
 
 | What the person sees | Meaning | Fix |
 |---|---|---|
-| "Incorrect password." | Wrong password, or the Railway value has a stray space or quotes | Re-share the password; check `FIELD_PASSWORD` on the **cfs-server** service |
-| "Could not sign in." | The server rejected the request or couldn't be reached | Check `FIELD_PASSWORD` exists on **cfs-server** and was deployed. Check `FRONTEND_URL` on cfs-server exactly matches the site's address (`https://…`, no trailing slash). A mismatch here breaks all forms on the site, not just sign-in |
-| "Too many attempts…" | Rate limit: 10 tries per minute per device/network | Wait a minute |
-| Back at the password box, no message | Cookie blocked (see the known issue above) | Workaround above |
+| "Incorrect email or password." | Wrong email or password | Check the email; if forgotten, an admin uses **Reset password** on Admin → Users |
+| "This account has been deactivated. Ask an admin." | An admin deactivated them | Admin → Users → Reactivate |
+| "Too many attempts. Wait 15 minutes and try again." | 5 failed tries from that email or network in 15 minutes | Wait, or reset their password |
+| "Could not reach the server." / page stuck loading | API down, or `FRONTEND_URL` on cfs-server doesn't exactly match the site's address (`https://…`, no trailing slash) | Check Railway; a `FRONTEND_URL` mismatch breaks all forms on the site |
+| "Your account can comment on posts but not create them." | Their role is `user` | Admin → Users → change role to Poster |
+| Signed in, but sent back to the sign-in page | Their password was reset or they were deactivated (sessions end immediately) | Sign in again with the new temporary password |
 
 Railway variable changes only take effect after clicking **Deploy**. Locally, restart `uvicorn` after editing `server/.env`; `--reload` doesn't watch `.env`.
 
@@ -147,8 +151,8 @@ Server env vars for the bootstrap account: `DEV_ADMIN_NAME`, `DEV_ADMIN_EMAIL`, 
 
 ### Open decisions
 
-1. **Are comments public?** Can website visitors read comments on In the Field, or only signed-in accounts? (Recommended: signed-in only to start.)
-2. **Who gets `user` accounts?** Office staff only, or also clients/GCs following a project? Clients would need a closer look at what they can see.
+1. ~~Are comments public?~~ **Decided Nov 7 2026: yes.** Website visitors can read comments on In the Field; only signed-in accounts can write them.
+2. ~~Who gets `user` accounts?~~ **Decided Nov 7 2026:** mainly Cavalier employees, but an admin can add anyone by email at any time.
 3. Existing posts with a free-text `author`: leave as-is (recommended), or assign each to an account?
 
 ### Acceptance criteria
@@ -291,7 +295,7 @@ The site is a React single-page app: pages are built in the browser by JavaScrip
 
 ## 4. Email alerts and the Admin → Notifications tab
 
-**Status:** Planned Nov 2026; scope agreed with the developer. **Build first.** Without it, leads sit in the database until someone happens to check `/admin`.
+**Status:** ✅ Built and tested locally, Nov 7 2026 (Gmail SMTP, all 8 alerts, Notifications tab, weekly digest script, intake saving incl. unfinished conversations). **Remaining:** deploy; create the Railway cron service for `weekly_digest.py` (see that file's docstring); `user_changes` starts firing when §1 ships; deleted-post alerts name the person once §1 ships.
 
 ### Goal
 
@@ -302,7 +306,7 @@ The right people get an email whenever something happens on the site, and admins
 | Alert | Fires when | Default recipients (editable) |
 |---|---|---|
 | **New contact form** | Contact form submitted (`/contact`, and the "Discuss a similar project" / "Let's Talk" modals) | smcgov11.11@gmail.com |
-| **New project intake** | A `/discuss` conversation completes and is saved | smcgov11.11@gmail.com |
+| **New project intake** | A `/discuss` conversation finishes, **or** the visitor stops replying for 10 minutes ("left without finishing"). One email per conversation. Every conversation is saved, finished or not ✅ built Nov 2026 | smcgov11.11@gmail.com |
 | **New In the Field post** | A post is created | smcgov11.11@gmail.com |
 | **In the Field post deleted** | A post is deleted (says who deleted it, and includes the caption and media links) | smcgov11.11@gmail.com |
 | **Repeated failed sign-ins** | An email or IP hits the sign-in limit (5 failures / 15 min) on any login | smcgov11.11@gmail.com |
@@ -493,7 +497,7 @@ The `/discuss` system prompt in [server/routes/intake.py](server/routes/intake.p
 
 ## 12. Logging and the Admin → Logs tab
 
-**Status:** Planned Nov 2026; scope expanded with the developer. The `logs` table exists but nothing writes to it, and `/api/track/visit` is a stub that returns 204 without saving. Build the `log_event` helper **with §4** (alerts log their sends), and the Logs tab after §1.
+**Status:** ✅ Built and tested locally Nov 7 2026. Everything below is logged with who did it; Admin → Logs has summary cards (visits 7 days, leads/intakes/posts this month, errors 24h), filters (category, level, person, date range in Eastern time, text search) and paging. Stack traces and failed-sign-in IP/email are visible to `dev_admin` only. 90-day cleanup runs in `weekly_digest.py`. Original scope: The `logs` table exists but nothing writes to it, and `/api/track/visit` is a stub that returns 204 without saving. Build the `log_event` helper **with §4** (alerts log their sends), and the Logs tab after §1.
 
 ### Goal
 

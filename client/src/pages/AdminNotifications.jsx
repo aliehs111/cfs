@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const API_BASE = import.meta.env.VITE_API_URL || ''
+import { apiFetch, readError } from '../lib/auth'
 
 const muted = 'rgba(236,228,215,0.4)'
 const soft = 'rgba(236,228,215,0.7)'
@@ -15,23 +14,13 @@ const labelStyle = {
   padding: 0,
 }
 
-async function readError(res, fallback) {
-  try {
-    const data = await res.json()
-    if (typeof data.detail === 'string') return data.detail
-  } catch {
-    /* not JSON */
-  }
-  return fallback
-}
-
 export default function AdminNotifications({ onUnauthorized }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let cancelled = false
-    fetch(`${API_BASE}/api/admin/notifications`, { credentials: 'include' })
+    apiFetch('/api/admin/notifications')
       .then(async (res) => {
         if (res.status === 401) return onUnauthorized()
         if (!res.ok) throw new Error(await readError(res, 'Could not load notifications.'))
@@ -100,10 +89,8 @@ function AlertRow({ alert, onSaved, onUnauthorized }) {
     setBusy(true)
     setStatus(null)
     try {
-      const res = await fetch(`${API_BASE}/api/admin/notifications/${alert.alert_type}`, {
+      const res = await apiFetch(`/api/admin/notifications/${alert.alert_type}`, {
         method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled, recipients }),
       })
       if (res.status === 401) return onUnauthorized()
@@ -135,9 +122,8 @@ function AlertRow({ alert, onSaved, onUnauthorized }) {
     setBusy(true)
     setStatus(null)
     try {
-      const res = await fetch(`${API_BASE}/api/admin/notifications/${alert.alert_type}/test`, {
+      const res = await apiFetch(`/api/admin/notifications/${alert.alert_type}/test`, {
         method: 'POST',
-        credentials: 'include',
       })
       if (res.status === 401) return onUnauthorized()
       if (!res.ok) throw new Error(await readError(res, 'Test failed.'))

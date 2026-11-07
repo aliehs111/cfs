@@ -18,6 +18,10 @@ const ROLE_HINTS = {
     "The more you can share, the more useful our reading. Things that help: the project type and scope, the bid schedule or target award date, the existing flooring or specs (or whether it's still being specified), the building's status (occupied vs. vacant), and any sequencing considerations.",
 }
 
+// Groups every turn of one conversation into one saved intake on the server.
+const newConversationId = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null
+
 export default function ProjectIntake() {
   const [state, setState] = useState(STATES.INTRO)
   const [role, setRole] = useState(null)
@@ -27,13 +31,14 @@ export default function ProjectIntake() {
   const [streamingText, setStreamingText] = useState('')
   const [error, setError] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
+  const [conversationId, setConversationId] = useState(null)
 
   const handleStart = (chosenRole) => {
     setRole(chosenRole)
     setState(STATES.INPUT)
   }
 
-  const sendToServer = async (newMessages) => {
+  const sendToServer = async (newMessages, convId = conversationId) => {
     setStreamingText('')
     setError('')
     setState(STATES.LOADING)
@@ -42,7 +47,11 @@ export default function ProjectIntake() {
       const res = await fetch(`${API_BASE}/api/project-intake`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, role }),
+        body: JSON.stringify({
+          messages: newMessages,
+          role,
+          ...(convId ? { conversation_id: convId } : {}),
+        }),
       })
 
       if (res.status === 429) throw new Error('rate_limit')
@@ -109,8 +118,10 @@ export default function ProjectIntake() {
   const handleSubmitInitial = () => {
     if (currentInput.trim().length < 10) return
     const newMessages = [{ role: 'user', content: currentInput.trim() }]
+    const convId = newConversationId()
+    setConversationId(convId)
     setMessages(newMessages)
-    sendToServer(newMessages)
+    sendToServer(newMessages, convId)
   }
 
   const handleSubmitFollowup = () => {
@@ -128,6 +139,7 @@ export default function ProjectIntake() {
     setState(STATES.INTRO)
     setRole(null)
     setMessages([])
+    setConversationId(null)
     setCurrentInput('')
     setFollowupInput('')
     setStreamingText('')

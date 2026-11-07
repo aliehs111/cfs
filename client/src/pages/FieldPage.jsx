@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import FieldComments from '../components/FieldComments'
+import { canPost, useCurrentUser } from '../lib/auth'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -19,6 +21,7 @@ export default function FieldPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [lightbox, setLightbox] = useState(null)
+  const { user, signOut } = useCurrentUser()
 
   const load = async (before) => {
     const url = new URL(`${API_BASE}/api/field/posts`, window.location.origin)
@@ -65,15 +68,31 @@ export default function FieldPage() {
         >
           From our crews
         </p>
-        {/* Staff entrance: quiet but always visible, since phones can't hover */}
-        <Link
-          to="/in-the-field/post"
-          aria-label="Team login: post to In the Field"
-          title="Team login"
-          className="hard-hat-link"
-        >
-          <HardHatIcon />
-        </Link>
+        <div className="flex items-center gap-5">
+          {user && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--off-white)', opacity: 0.55 }}>
+              {user.name} ·{' '}
+              <button
+                type="button"
+                onClick={signOut}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Sign out
+              </button>
+            </span>
+          )}
+          {/* Staff entrance: quiet but always visible, since phones can't hover */}
+          {(!user || canPost(user)) && (
+            <Link
+              to={user ? '/in-the-field/post' : '/login?next=/in-the-field/post'}
+              aria-label={user ? 'Post to In the Field' : 'Team sign-in'}
+              title={user ? 'New post' : 'Team sign-in'}
+              className="hard-hat-link"
+            >
+              <HardHatIcon />
+            </Link>
+          )}
+        </div>
       </div>
       <h1
         className="font-display"
@@ -113,7 +132,12 @@ export default function FieldPage() {
         {posts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
             {posts.map((post) => (
-              <FieldPostCard key={post.id} post={post} onOpenImage={setLightbox} />
+              <FieldPostCard
+                key={post.id}
+                post={post}
+                onOpenImage={setLightbox}
+                footer={<FieldComments key={user?.id || 'anon'} post={post} user={user} />}
+              />
             ))}
           </div>
         )}

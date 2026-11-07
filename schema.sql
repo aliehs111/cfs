@@ -186,3 +186,59 @@ insert into notification_settings (alert_type, enabled, recipients) values
   ('user_changes',       true, array['smcgov11.11@gmail.com']),
   ('weekly_digest',      true, array['smcgov11.11@gmail.com'])
 on conflict (alert_type) do nothing;
+
+-- =========================================================
+-- PROJECT INTAKE: save every conversation, finished or not (added Nov 2026,
+-- specs.md §4). Run on its own in the Supabase SQL Editor.
+-- =========================================================
+alter table project_responses add column if not exists conversation_id uuid unique;
+alter table project_responses add column if not exists transcript jsonb;       -- [{ "role": "user" | "assistant", "content" }]
+alter table project_responses add column if not exists status text;            -- 'in_progress' | 'complete' (null = older rows, all complete)
+alter table project_responses add column if not exists updated_at timestamptz default now();
+alter table project_responses add column if not exists alerted_at timestamptz; -- set once the email alert has gone out
+create index if not exists project_responses_unalerted_idx
+  on project_responses (status, updated_at) where alerted_at is null;
+
+-- =========================================================
+-- USER ACCOUNTS (added Nov 2026, specs.md §1) — run on its own in the
+-- Supabase SQL Editor. The developer account is created automatically at
+-- server startup from DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD.
+-- =========================================================
+create table if not exists app_users (
+  id uuid primary key default gen_random_uuid(),
+  first_name text not null,
+  last_name text not null default '',
+  email text not null unique,                        -- stored lowercased
+  role text not null check (role in ('dev_admin', 'admin', 'poster', 'user')),
+  password_hash text not null,                       -- scrypt; never the password itself
+  must_change_password boolean not null default true,
+  session_version int not null default 1,            -- bumped to sign someone out everywhere
+  active boolean not null default true,              -- no hard delete; deactivate instead
+  last_sign_in_at timestamptz,
+  created_at timestamptz default now(),
+  created_by uuid references app_users (id)
+);
+alter table app_users enable row level security;
+
+-- =========================================================
+-- IN THE FIELD ON ACCOUNTS + COMMENTS (added Nov 2026, specs.md §1 step 2)
+-- Run on its own in the Supabase SQL Editor.
+-- =========================================================
+-- Who posted it. Older posts keep only the free-text `author`.
+alter table field_posts add column if not exists user_id uuid references app_users (id);
+
+-- 7. Comments and one level of replies. Anyone can read them on the site;
+-- only signed-in accounts can write. Soft delete keeps reply threads intact.
+create table if not exists field_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references field_posts (id) on delete cascade,
+  parent_id uuid references field_comments (id) on delete cascade,  -- null = top-level comment
+  user_id uuid not null references app_users (id),
+  body text not null,
+  created_at timestamptz default now(),
+  edited_at timestamptz,
+  deleted_at timestamptz,
+  deleted_by uuid references app_users (id)
+);
+create index if not exists field_comments_post_idx on field_comments (post_id, created_at);
+alter table field_comments enable row level security;

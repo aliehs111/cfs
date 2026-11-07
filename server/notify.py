@@ -215,7 +215,7 @@ _failures: dict[str, deque] = defaultdict(deque)
 
 
 def record_login_failure(kind: str, ip: str, route: str, email: str | None = None) -> None:
-    """Log a failed sign-in; alert when one source hits the limit. kind: "admin" | "field"."""
+    """Log a failed sign-in; alert when one source hits the limit. kind: "account" | "field"."""
     log_event("auth.login_failed", level="warning", route=route,
               metadata={"login": kind, "ip": ip, **({"email": email} if email else {})})
     key = f"{kind}:{ip}"
@@ -228,7 +228,7 @@ def record_login_failure(kind: str, ip: str, route: str, email: str | None = Non
         count = len(q)
     if count < FAILED_LOGIN_LIMIT:
         return
-    label = "Admin" if kind == "admin" else "In the Field"
+    label = {"admin": "Admin", "field": "In the Field", "account": "Website sign-in"}.get(kind, kind)
     text, html = render(
         f"Repeated failed sign-ins: {label}",
         [

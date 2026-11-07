@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { FieldPostCard } from './FieldPage'
+import { apiFetch, canPost, isAdmin, readError, useCurrentUser } from '../lib/auth'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const LOGIN_PATH = '/login?next=/in-the-field/post'
 
 // Supabase free plan caps each file at 50 MB. Raise this (and the bucket's
 // file_size_limit in schema.sql) if the project moves to a paid plan.
 const MAX_VIDEO_MB = 50
 const MAX_FILES = 10
 const MAX_IMAGE_DIMENSION = 2400
-const NAME_KEY = 'cavalier_field_author'
 
 const EXT_TYPES = {
   jpg: 'image/jpeg',
@@ -27,22 +27,6 @@ function fileType(file) {
   if (file.type) return file.type
   const ext = file.name.split('.').pop()?.toLowerCase()
   return EXT_TYPES[ext] || ''
-}
-
-function readStored(key) {
-  try {
-    return localStorage.getItem(key) || ''
-  } catch {
-    return ''
-  }
-}
-
-function writeStored(key, value) {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* private mode etc. — not important */
-  }
 }
 
 // Shrink phone photos (often 4000px+, 5–12 MB) before upload so posting
@@ -123,108 +107,57 @@ const textButton = {
 }
 
 export default function FieldPostPage() {
-  const [authed, setAuthed] = useState(null)
+  const { user, loading, signOut } = useCurrentUser()
+  const navigate = useNavigate()
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/field/session`, { credentials: 'include' })
-      .then((res) => setAuthed(res.ok))
-      .catch(() => setAuthed(false))
-  }, [])
+    if (!loading && !user) navigate(LOGIN_PATH, { replace: true })
+  }, [loading, user, navigate])
 
-  const logout = async () => {
-    try {
-      await fetch(`${API_BASE}/api/field/logout`, { method: 'POST', credentials: 'include' })
-    } catch {
-      /* ignore */
-    }
-    setAuthed(false)
+  const leave = () => {
+    signOut()
+    navigate('/in-the-field', { replace: true })
   }
 
   return (
     <section className="w-full max-w-2xl mx-auto px-6 pt-16 pb-24">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <p
           className="uppercase"
           style={{ color: 'var(--maroon)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
         >
           In the Field · Staff
         </p>
-        {authed && (
-          <button type="button" onClick={logout} className="text-xs uppercase" style={textButton}>
-            Sign out
-          </button>
+        {user && (
+          <span className="flex items-center gap-4" style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+            {user.name}
+            <button type="button" onClick={leave} className="text-xs uppercase" style={textButton}>
+              Sign out
+            </button>
+          </span>
         )}
       </div>
 
-      {authed === null && <p style={{ opacity: 0.4, marginTop: '2rem' }}>Loading…</p>}
-      {authed === false && <LoginForm onSuccess={() => setAuthed(true)} />}
-      {authed === true && <PostManager onUnauthorized={() => setAuthed(false)} />}
+      {loading && <p style={{ opacity: 0.4, marginTop: '2rem' }}>Loading…</p>}
+      {user && !canPost(user) && (
+        <p style={{ marginTop: '2rem', fontSize: '0.95rem', lineHeight: 1.7, opacity: 0.8 }}>
+          Your account can comment on posts but not create them. Ask an admin if you need posting access.{' '}
+          <Link to="/in-the-field" style={{ color: 'var(--off-white)', borderBottom: '1px solid var(--maroon)', textDecoration: 'none' }}>
+            Go to In the Field →
+          </Link>
+        </p>
+      )}
+      {user && canPost(user) && (
+        <PostManager user={user} onUnauthorized={() => navigate(LOGIN_PATH, { replace: true })} />
+      )}
     </section>
   )
 }
 
-function LoginForm({ onSuccess }) {
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setBusy(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/field/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      })
-      if (res.status === 401) return setError('Incorrect password.')
-      if (res.status === 429) return setError('Too many attempts. Wait a minute and try again.')
-      if (!res.ok) throw new Error('failed')
-      onSuccess()
-    } catch {
-      setError('Could not sign in.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="max-w-sm">
-      <h1
-        className="font-display"
-        style={{
-          fontSize: 'clamp(2rem, 6vw, 3rem)',
-          color: 'var(--off-white)',
-          letterSpacing: '-0.02em',
-          margin: '1.5rem 0 2rem',
-        }}
-      >
-        Sign in to post
-      </h1>
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Team password"
-        autoFocus
-        autoComplete="current-password"
-        style={inputStyle}
-      />
-      {error && <p className="text-xs mt-4" style={{ color: 'var(--maroon)' }}>{error}</p>}
-      <button type="submit" disabled={busy} className="text-xs uppercase mt-8" style={textButton}>
-        {busy ? 'Signing in…' : 'Enter →'}
-      </button>
-    </form>
-  )
-}
-
-function PostManager({ onUnauthorized }) {
+function PostManager({ user, onUnauthorized }) {
   const [items, setItems] = useState([]) // { id, file, type, preview }
   const [caption, setCaption] = useState('')
   const [location, setLocation] = useState('')
-  const [author, setAuthor] = useState(() => readStored(NAME_KEY))
   const [status, setStatus] = useState('idle') // idle | uploading | done
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
@@ -239,13 +172,20 @@ function PostManager({ onUnauthorized }) {
   useEffect(() => () => itemsRef.current.forEach((i) => URL.revokeObjectURL(i.preview)), [])
 
   const loadRecent = () =>
-    fetch(`${API_BASE}/api/field/posts`)
+    apiFetch('/api/field/posts')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setRecent(d.posts || []))
       .catch(() => {})
 
   useEffect(() => {
-    loadRecent()
+    let cancelled = false
+    apiFetch('/api/field/posts')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => !cancelled && setRecent(d.posts || []))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const addFiles = (fileList) => {
@@ -287,7 +227,6 @@ function PostManager({ onUnauthorized }) {
     if (!items.length) return setError('Add at least one photo or video.')
     setError('')
     setStatus('uploading')
-    writeStored(NAME_KEY, author.trim())
 
     try {
       const media = []
@@ -298,13 +237,11 @@ function PostManager({ onUnauthorized }) {
           ? await prepareImage(item.file)
           : { blob: item.file, type: item.type }
 
-        const urlRes = await fetch(`${API_BASE}/api/field/upload-url`, {
+        const urlRes = await apiFetch('/api/field/upload-url', {
           method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content_type: type }),
         })
-        if (urlRes.status === 401) return onUnauthorized()
+        if (urlRes.status === 401 || urlRes.status === 403) return onUnauthorized()
         if (urlRes.status === 400) throw new Error(`${item.file.name}: that file type isn't supported.`)
         if (!urlRes.ok) throw new Error('Could not start the upload.')
         const { path, upload_url } = await urlRes.json()
@@ -316,13 +253,11 @@ function PostManager({ onUnauthorized }) {
       }
 
       setProgress('Publishing…')
-      const res = await fetch(`${API_BASE}/api/field/posts`, {
+      const res = await apiFetch('/api/field/posts', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption, location, author, media }),
+        body: JSON.stringify({ caption, location, media }),
       })
-      if (res.status === 401) return onUnauthorized()
+      if (res.status === 401 || res.status === 403) return onUnauthorized()
       if (!res.ok) throw new Error('Could not publish the post.')
 
       items.forEach((i) => URL.revokeObjectURL(i.preview))
@@ -345,14 +280,13 @@ function PostManager({ onUnauthorized }) {
 
   const deletePost = async (id) => {
     if (!window.confirm('Delete this post from the website?')) return
-    const res = await fetch(`${API_BASE}/api/field/posts/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    })
+    const res = await apiFetch(`/api/field/posts/${id}`, { method: 'DELETE' })
     if (res.status === 401) return onUnauthorized()
     if (res.ok) setRecent((prev) => prev.filter((p) => p.id !== id))
-    else window.alert('Could not delete that post.')
+    else window.alert(await readError(res, 'Could not delete that post.'))
   }
+
+  const canManage = (post) => isAdmin(user) || post.user_id === user.id
 
   const uploading = status === 'uploading'
 
@@ -482,16 +416,7 @@ function PostManager({ onUnauthorized }) {
           style={inputStyle}
         />
 
-        <label style={labelStyle} htmlFor="field-author">Your name (optional)</label>
-        <input
-          id="field-author"
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
-          maxLength={100}
-          autoComplete="name"
-          disabled={uploading}
-          style={inputStyle}
-        />
+        <p style={{ fontSize: '0.8rem', opacity: 0.5, marginTop: '1.5rem' }}>Posting as {user.name}.</p>
 
         {error && <p className="text-sm mt-6" style={{ color: 'var(--maroon)' }}>{error}</p>}
         {progress && <p className="text-sm mt-6" style={{ opacity: 0.7 }}>{progress}</p>}
@@ -530,14 +455,14 @@ function PostManager({ onUnauthorized }) {
                 key={post.id}
                 post={post}
                 footer={
-                  <button
-                    type="button"
-                    onClick={() => deletePost(post.id)}
-                    className="text-xs uppercase mt-4"
-                    style={{ ...textButton, color: 'var(--maroon)', borderBottomColor: 'rgba(168,36,58,0.4)' }}
-                  >
-                    Delete
-                  </button>
+                  canManage(post) ? (
+                    <PostActions
+                      post={post}
+                      onDelete={() => deletePost(post.id)}
+                      onSaved={(updated) => setRecent((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))}
+                      onUnauthorized={onUnauthorized}
+                    />
+                  ) : null
                 }
               />
             ))}
@@ -545,5 +470,86 @@ function PostManager({ onUnauthorized }) {
         </div>
       )}
     </>
+  )
+}
+
+function PostActions({ post, onDelete, onSaved, onUnauthorized }) {
+  const [editing, setEditing] = useState(false)
+  const [caption, setCaption] = useState(post.caption || '')
+  const [location, setLocation] = useState(post.location || '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const save = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const res = await apiFetch(`/api/field/posts/${post.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ caption, location }),
+      })
+      if (res.status === 401) return onUnauthorized()
+      if (!res.ok) throw new Error(await readError(res, 'Could not save.'))
+      onSaved((await res.json()).post)
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <form onSubmit={save} className="mt-4">
+        <textarea
+          aria-label="Caption"
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          style={{ ...inputStyle, resize: 'vertical' }}
+        />
+        <input
+          aria-label="Location"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          maxLength={200}
+          placeholder="Location"
+          style={inputStyle}
+        />
+        {error && <p className="text-xs mt-3" style={{ color: 'var(--maroon)' }}>{error}</p>}
+        <div className="flex gap-6 mt-4">
+          <button type="submit" disabled={busy} className="text-xs uppercase" style={textButton}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-xs uppercase"
+            style={{ ...textButton, opacity: 0.5, borderBottom: 'none' }}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <div className="flex gap-6 mt-4">
+      <button type="button" onClick={() => setEditing(true)} className="text-xs uppercase" style={textButton}>
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        className="text-xs uppercase"
+        style={{ ...textButton, color: 'var(--maroon)', borderBottomColor: 'rgba(168,36,58,0.4)' }}
+      >
+        Delete
+      </button>
+    </div>
   )
 }

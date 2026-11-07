@@ -1,109 +1,93 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import AdminLogs from './AdminLogs'
 import AdminNotifications from './AdminNotifications'
+import AdminUsers from './AdminUsers'
+import { apiFetch, getToken, homeFor, isAdmin, ROLE_LABELS as ACCOUNT_ROLES, setToken } from '../lib/auth'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
-
-const TABS = { SUBMISSIONS: 'submissions', INTAKES: 'intakes', NOTIFICATIONS: 'notifications' }
+const TABS = {
+  SUBMISSIONS: 'submissions',
+  INTAKES: 'intakes',
+  USERS: 'users',
+  NOTIFICATIONS: 'notifications',
+  LOGS: 'logs',
+}
 
 const ROLE_LABELS = {
   owner: 'Owner / Facility',
   specifier: 'GC / Specifier',
 }
 
+const quietButton = {
+  color: 'rgba(236,228,215,0.4)',
+  letterSpacing: '0.14em',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 0,
+}
+
 export default function AdminPage() {
-  const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+  const [me, setMe] = useState(null)
+  // null = checking; true = signed in as an admin; 'forbidden' = signed in without admin access
   const [authed, setAuthed] = useState(null)
   const [tab, setTab] = useState(TABS.SUBMISSIONS)
   const [contacts, setContacts] = useState([])
   const [intakes, setIntakes] = useState([])
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [listState, setListState] = useState({ tab: null, error: '' }) // which list finished loading
   const [expanded, setExpanded] = useState(null)
 
+  const goToLogin = useCallback(() => navigate('/login?next=/admin', { replace: true }), [navigate])
+
   useEffect(() => {
-    fetch(`${API_BASE}/api/admin/session`, { credentials: 'include' })
-      .then((res) => setAuthed(res.ok))
-      .catch(() => setAuthed(false))
-  }, [])
+    if (!getToken()) return goToLogin()
+    apiFetch('/api/auth/me')
+      .then(async (res) => {
+        if (!res.ok) return goToLogin()
+        const { user } = await res.json()
+        if (user.must_change_password) return goToLogin()
+        setMe(user)
+        setAuthed(isAdmin(user) ? true : 'forbidden')
+      })
+      .catch(() => setError('Could not reach the server.'))
+  }, [goToLogin])
+
+  const handleUnauthorized = useCallback(() => goToLogin(), [goToLogin])
 
   useEffect(() => {
     if (authed !== true) return
-    if (tab === TABS.SUBMISSIONS) fetchContacts()
-    if (tab === TABS.INTAKES) fetchIntakes()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed, tab])
-
-  const fetchContacts = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/contacts`, { credentials: 'include' })
-      if (res.status === 401) {
-        setAuthed(false)
-        return
-      }
-      if (!res.ok) throw new Error('failed')
-      const data = await res.json()
-      setContacts(data.contacts || [])
-    } catch {
-      setError('Could not load submissions.')
-    } finally {
-      setLoading(false)
+    const lists = {
+      [TABS.SUBMISSIONS]: ['/api/admin/contacts', 'contacts', setContacts, 'Could not load submissions.'],
+      [TABS.INTAKES]: ['/api/admin/intakes', 'intakes', setIntakes, 'Could not load project intakes.'],
     }
-  }
-
-  const fetchIntakes = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/intakes`, { credentials: 'include' })
-      if (res.status === 401) {
-        setAuthed(false)
-        return
-      }
-      if (!res.ok) throw new Error('failed')
-      const data = await res.json()
-      setIntakes(data.intakes || [])
-    } catch {
-      setError('Could not load project intakes.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleUnauthorized = useCallback(() => setAuthed(false), [])
-
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setError('')
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+    if (!lists[tab]) return
+    const [path, key, setter, failMessage] = lists[tab]
+    let cancelled = false
+    apiFetch(path)
+      .then(async (res) => {
+        if (res.status === 401 || res.status === 403) return goToLogin()
+        if (!res.ok) throw new Error('failed')
+        const data = await res.json()
+        if (cancelled) return
+        setter(data[key] || [])
+        setListState({ tab, error: '' })
       })
-      if (res.status === 401) {
-        setError('Incorrect password.')
-        return
-      }
-      if (!res.ok) throw new Error('failed')
-      setPassword('')
-      setAuthed(true)
-    } catch {
-      setError('Could not sign in.')
+      .catch(() => !cancelled && setListState({ tab, error: failMessage }))
+    return () => {
+      cancelled = true
+      setListState({ tab: null, error: '' })
     }
-  }
+  }, [authed, tab, goToLogin])
 
-  const handleLogout = async () => {
-    try {
-      await fetch(`${API_BASE}/api/admin/logout`, { method: 'POST', credentials: 'include' })
-    } catch {
-      /* ignore */
-    }
-    setAuthed(false)
-    setContacts([])
-    setIntakes([])
+  const isListTab = tab === TABS.SUBMISSIONS || tab === TABS.INTAKES
+  const loading = isListTab && listState.tab !== tab
+  const listError = listState.tab === tab ? listState.error : ''
+
+  const handleLogout = () => {
+    setToken(null)
+    navigate('/login', { replace: true })
   }
 
   return (
@@ -112,91 +96,61 @@ export default function AdminPage() {
       style={{ backgroundColor: 'var(--charcoal)' }}
     >
       <div className="max-w-5xl mx-auto">
-        <p
-          className="font-body text-xs font-medium tracking-widest uppercase mb-8"
-          style={{ color: 'var(--off-white)', letterSpacing: '0.16em' }}
-        >
-          Admin
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-4 mb-8">
+          <p
+            className="font-body text-xs font-medium tracking-widest uppercase"
+            style={{ color: 'var(--off-white)', letterSpacing: '0.16em' }}
+          >
+            Admin
+          </p>
+          {me && (
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              <span className="font-body" style={{ color: 'rgba(236,228,215,0.6)', fontSize: '13px', fontWeight: 300 }}>
+                {me.name} · {ACCOUNT_ROLES[me.role]}
+              </span>
+              <Link
+                to="/login?change=1&next=/admin"
+                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
+                style={quietButton}
+              >
+                Change password
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
+                style={quietButton}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
 
         {authed === null && (
-          <p
-            className="font-body text-xs"
-            style={{ color: 'rgba(236,228,215,0.4)' }}
-          >
-            Loading...
+          <p className="font-body text-xs" style={{ color: 'rgba(236,228,215,0.4)' }}>
+            {error || 'Loading...'}
           </p>
         )}
 
-        {authed === false && (
-          <form onSubmit={handleLogin} className="max-w-sm">
-            <h2
-              className="font-display mb-8"
-              style={{
-                color: 'var(--off-white)',
-                fontSize: 'clamp(24px, 3vw, 36px)',
-                fontWeight: 500,
-                lineHeight: 1.15,
-              }}
-            >
-              Sign in
-            </h2>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Admin password"
-              autoFocus
-              autoComplete="current-password"
-              style={{
-                width: '100%',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: '1px solid rgba(236,228,215,0.2)',
-                padding: '12px 0',
-                fontFamily: '"DM Sans", system-ui, sans-serif',
-                fontSize: '15px',
-                fontWeight: 300,
-                color: 'var(--off-white)',
-                outline: 'none',
-                caretColor: 'var(--maroon)',
-              }}
-            />
-            {error && (
-              <p
-                className="font-body text-xs mt-4"
-                style={{ color: 'var(--maroon)' }}
-              >
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 mt-8"
-              style={{
-                color: 'var(--off-white)',
-                letterSpacing: '0.14em',
-                background: 'none',
-                border: 'none',
-                borderBottom: '1px solid rgba(236,228,215,0.3)',
-                cursor: 'pointer',
-                padding: 0,
-                paddingBottom: '3px',
-              }}
-            >
-              Enter →
-            </button>
-          </form>
+        {authed === 'forbidden' && (
+          <p className="font-body" style={{ color: 'rgba(236,228,215,0.7)', fontSize: '15px', fontWeight: 300 }}>
+            Your account doesn&apos;t have admin access.{' '}
+            <Link to={homeFor(me)} style={{ color: 'var(--maroon)' }}>
+              Continue to the site →
+            </Link>
+          </p>
         )}
 
         {authed === true && (
           <div>
-            <div className="flex items-center justify-between mb-12">
+            <div className="mb-12">
               <nav className="flex flex-wrap gap-x-8 gap-y-3">
                 {Object.entries({
                   [TABS.SUBMISSIONS]: 'Submissions',
                   [TABS.INTAKES]: 'Project Intakes',
+                  [TABS.USERS]: 'Users',
                   [TABS.NOTIFICATIONS]: 'Notifications',
+                  [TABS.LOGS]: 'Logs',
                 }).map(([key, label]) => (
                   <button
                     key={key}
@@ -219,21 +173,10 @@ export default function AdminPage() {
                   </button>
                 ))}
               </nav>
-              <button
-                onClick={handleLogout}
-                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
-                style={{
-                  color: 'rgba(236,228,215,0.4)',
-                  letterSpacing: '0.14em',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-              >
-                Sign out
-              </button>
             </div>
+
+            {tab === TABS.USERS && <AdminUsers me={me} onUnauthorized={handleUnauthorized} />}
+            {tab === TABS.LOGS && <AdminLogs me={me} onUnauthorized={handleUnauthorized} />}
 
             {loading && (
               <p
@@ -243,18 +186,18 @@ export default function AdminPage() {
                 Loading...
               </p>
             )}
-            {error && (
+            {listError && (
               <p
                 className="font-body text-xs mb-6"
                 style={{ color: 'var(--maroon)' }}
               >
-                {error}
+                {listError}
               </p>
             )}
 
             {tab === TABS.SUBMISSIONS && !loading && (
               <>
-                {contacts.length === 0 && !error && (
+                {contacts.length === 0 && !listError && (
                   <p
                     className="font-body"
                     style={{
@@ -387,7 +330,7 @@ export default function AdminPage() {
 
             {tab === TABS.INTAKES && !loading && (
               <>
-                {intakes.length === 0 && !error && (
+                {intakes.length === 0 && !listError && (
                   <p
                     className="font-body"
                     style={{
@@ -441,6 +384,14 @@ export default function AdminPage() {
                             >
                               {roleLabel}
                             </p>
+                            {i.status === 'in_progress' && (
+                              <p
+                                className="font-body text-xs mt-1"
+                                style={{ color: 'rgba(236,228,215,0.5)' }}
+                              >
+                                Left without finishing
+                              </p>
+                            )}
                           </div>
                           <div className="md:col-span-7">
                             <p
@@ -470,7 +421,37 @@ export default function AdminPage() {
                             </span>
                           </div>
                         </div>
-                        {isOpen && (
+                        {isOpen && Array.isArray(i.transcript) && i.transcript.length > 0 && (
+                          <div className="mt-6" style={{ maxWidth: '44rem' }}>
+                            {i.transcript.map((m, idx) => (
+                              <div key={idx} className="mb-5">
+                                <p
+                                  className="font-body text-xs font-medium tracking-widest uppercase mb-2"
+                                  style={{
+                                    color: m.role === 'user' ? 'rgba(236,228,215,0.4)' : 'var(--maroon)',
+                                    letterSpacing: '0.12em',
+                                  }}
+                                >
+                                  {m.role === 'user' ? 'Visitor' : "Cavalier's read"}
+                                </p>
+                                <pre
+                                  className="font-body p-4 whitespace-pre-wrap break-words"
+                                  style={{
+                                    color: 'rgba(236,228,215,0.7)',
+                                    fontSize: '13px',
+                                    lineHeight: 1.8,
+                                    fontWeight: 300,
+                                    backgroundColor: 'rgba(236,228,215,0.04)',
+                                    fontFamily: '"DM Sans", system-ui, sans-serif',
+                                  }}
+                                >
+                                  {m.content}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {isOpen && !(Array.isArray(i.transcript) && i.transcript.length > 0) && (
                           <div className="mt-6 grid md:grid-cols-2 gap-6">
                             <div>
                               <p

@@ -1,101 +1,27 @@
 import asyncio
-from datetime import datetime, timezone
 import os
 import re
-import hmac
-import hashlib
-import time
 import traceback
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
-from pydantic import BaseModel
-from supabase_client import get_supabase
+from datetime import datetime, timedelta, timezone
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+import auth
 import mailer
-from limiter import client_ip
 from logger import log_event
-from notify import ALERTS, eastern_now, record_login_failure, render
+from notify import ALERTS, eastern_now, render
+from supabase_client import get_supabase
 
 router = APIRouter()
 
-COOKIE_NAME = "cavalier_admin_session"
-SESSION_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
-
-
-def _admin_password() -> str:
-    pw = os.environ.get("ADMIN_PASSWORD")
-    if not pw:
-        raise HTTPException(status_code=500, detail="server misconfigured")
-    return pw
-
-
-def _signing_key() -> bytes:
-    secret = os.environ.get("ADMIN_SESSION_SECRET") or _admin_password()
-    return secret.encode()
-
-
-def _make_token() -> str:
-    timestamp = str(int(time.time()))
-    sig = hmac.new(_signing_key(), timestamp.encode(), hashlib.sha256).hexdigest()
-    return f"{timestamp}.{sig}"
-
-
-def _verify_token(token: str | None) -> bool:
-    if not token or "." not in token:
-        return False
-    timestamp_str, sig = token.split(".", 1)
-    try:
-        timestamp = int(timestamp_str)
-    except ValueError:
-        return False
-    if time.time() - timestamp > SESSION_TTL_SECONDS:
-        return False
-    expected = hmac.new(_signing_key(), timestamp_str.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig)
-
-
-def _is_production() -> bool:
-    return os.environ.get("ENV", "").lower() == "production"
-
-
-class LoginPayload(BaseModel):
-    password: str
-
-
-@router.post("/admin/login")
-async def admin_login(request: Request, payload: LoginPayload, response: Response):
-    if not hmac.compare_digest(payload.password.encode(), _admin_password().encode()):
-        record_login_failure("admin", client_ip(request), "/api/admin/login")
-        raise HTTPException(status_code=401, detail="unauthorized")
-    log_event("auth.signed_in", route="/api/admin/login", metadata={"login": "admin"})
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=_make_token(),
-        httponly=True,
-        secure=_is_production(),
-        samesite="none" if _is_production() else "lax",
-        max_age=SESSION_TTL_SECONDS,
-        path="/",
-    )
-    return {"status": "ok"}
-
-
-@router.post("/admin/logout")
-async def admin_logout(response: Response):
-    response.delete_cookie(COOKIE_NAME, path="/")
-    return {"status": "ok"}
-
-
-@router.get("/admin/session")
-async def admin_session(cavalier_admin_session: str | None = Cookie(default=None)):
-    if not _verify_token(cavalier_admin_session):
-        raise HTTPException(status_code=401, detail="unauthorized")
-    return {"status": "ok"}
+# Every admin endpoint requires a signed-in admin or dev_admin account (specs.md §1).
+# The old shared ADMIN_PASSWORD login was removed Nov 2026.
+require_admin = auth.require_roles(*auth.ADMIN_ROLES)
 
 
 @router.get("/admin/contacts")
-async def list_contacts(cavalier_admin_session: str | None = Cookie(default=None)):
-    if not _verify_token(cavalier_admin_session):
-        raise HTTPException(status_code=401, detail="unauthorized")
+async def list_contacts(actor: dict = Depends(require_admin)):
     try:
         supabase = get_supabase()
         res = supabase.table("contacts").select("*").order("created_at", desc=True).execute()
@@ -106,9 +32,7 @@ async def list_contacts(cavalier_admin_session: str | None = Cookie(default=None
 
 
 @router.get("/admin/intakes")
-async def list_intakes(cavalier_admin_session: str | None = Cookie(default=None)):
-    if not _verify_token(cavalier_admin_session):
-        raise HTTPException(status_code=401, detail="unauthorized")
+async def list_intakes(actor: dict = Depends(require_admin)):
     try:
         supabase = get_supabase()
         res = (
@@ -128,14 +52,8 @@ async def list_intakes(cavalier_admin_session: str | None = Cookie(default=None)
 EMAIL_RE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 
 
-def _require_admin(token: str | None) -> None:
-    if not _verify_token(token):
-        raise HTTPException(status_code=401, detail="unauthorized")
-
-
 @router.get("/admin/notifications")
-async def list_notifications(cavalier_admin_session: str | None = Cookie(default=None)):
-    _require_admin(cavalier_admin_session)
+async def list_notifications(actor: dict = Depends(require_admin)):
     try:
         res = get_supabase().table("notification_settings").select("*").execute()
     except Exception as exc:
@@ -168,9 +86,8 @@ class NotificationUpdate(BaseModel):
 async def update_notification(
     alert_type: str,
     payload: NotificationUpdate,
-    cavalier_admin_session: str | None = Cookie(default=None),
+    actor: dict = Depends(require_admin),
 ):
-    _require_admin(cavalier_admin_session)
     if alert_type not in ALERTS:
         raise HTTPException(status_code=404, detail="unknown_alert")
 
@@ -191,7 +108,7 @@ async def update_notification(
         "enabled": payload.enabled,
         "recipients": recipients,
         "updated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_by": "admin",
+        "updated_by": auth.full_name(actor),
     }
     try:
         res = get_supabase().table("notification_settings").upsert(row).execute()
@@ -199,7 +116,7 @@ async def update_notification(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"notifications_save_failed: {type(exc).__name__}")
 
-    log_event("notifications.updated", route=f"/api/admin/notifications/{alert_type}",
+    log_event("notifications.updated", route=f"/api/admin/notifications/{alert_type}", actor_id=actor["id"],
               entity_type="notification_setting", entity_id=alert_type,
               metadata={"enabled": payload.enabled, "recipients": recipients})
     saved = (res.data or [row])[0]
@@ -207,9 +124,8 @@ async def update_notification(
 
 
 @router.post("/admin/notifications/{alert_type}/test")
-async def test_notification(alert_type: str, cavalier_admin_session: str | None = Cookie(default=None)):
+async def test_notification(alert_type: str, actor: dict = Depends(require_admin)):
     """Send a sample to this alert's recipients, even if the alert is switched off."""
-    _require_admin(cavalier_admin_session)
     meta = ALERTS.get(alert_type)
     if not meta:
         raise HTTPException(status_code=404, detail="unknown_alert")
@@ -244,5 +160,111 @@ async def test_notification(alert_type: str, cavalier_admin_session: str | None 
                   metadata={"alert_type": alert_type, "test": True})
         # 400, not 5xx: a bad email setting shouldn't also fire a server-error alert.
         raise HTTPException(status_code=400, detail=f"Email failed to send: {type(exc).__name__}: {exc}")
-    log_event("alert.test_sent", metadata={"alert_type": alert_type, "recipients": len(recipients)})
+    log_event("alert.test_sent", actor_id=actor["id"], metadata={"alert_type": alert_type, "recipients": len(recipients)})
     return {"status": "sent", "recipients": recipients}
+
+
+# ---------------------------------------------------------------- logs (specs.md §12)
+
+LOG_PAGE_SIZE = 50
+LOG_CATEGORIES = {
+    "visits": ["page."],
+    "leads": ["contact.", "intake."],
+    "chat": ["chat."],
+    "field": ["field_post.", "comment."],
+    "accounts": ["auth.", "user."],
+    "admin": ["notifications."],
+    "email": ["alert."],
+    "protection": ["rate_limit.", "spam."],
+    "errors": ["server."],
+}
+# Shown to dev_admin only: stack traces, and who/where a failed sign-in came from.
+DEV_ONLY_METADATA = {"traceback", "ip", "email"}
+
+
+def _safe_search(q: str) -> str:
+    return re.sub(r"[%,()*\\\\]", " ", q).strip()[:100]
+
+
+@router.get("/admin/logs")
+async def list_logs(
+    category: str = "activity",
+    level: str | None = None,
+    actor_id: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    q: str | None = None,
+    before: str | None = None,
+    actor: dict = Depends(require_admin),
+):
+    """Newest first, LOG_PAGE_SIZE at a time. Pass the last row's created_at as `before`.
+    category: "activity" (everything except page visits), "all", or a LOG_CATEGORIES key."""
+    query = (
+        get_supabase().table("logs")
+        .select("id, created_at, level, event, route, message, metadata, actor_id, entity_type, entity_id")
+        .order("created_at", desc=True)
+        .limit(LOG_PAGE_SIZE + 1)
+    )
+    if category == "activity":
+        query = query.neq("event", "page.visit")
+    elif category in LOG_CATEGORIES:
+        query = query.or_(",".join(f"event.like.{p}*" for p in LOG_CATEGORIES[category]))
+    elif category != "all":
+        raise HTTPException(status_code=400, detail="Unknown category.")
+    if level in ("info", "warning", "error"):
+        query = query.eq("level", level)
+    if actor_id:
+        query = query.eq("actor_id", actor_id)
+    if since:
+        query = query.gte("created_at", since)
+    if until:
+        query = query.lt("created_at", until)
+    if q and _safe_search(q):
+        query = query.ilike("message", f"%{_safe_search(q)}%")
+    if before:
+        query = query.lt("created_at", before)
+    try:
+        rows = query.execute().data or []
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Could not load logs: {type(exc).__name__}")
+
+    page = rows[:LOG_PAGE_SIZE]
+    ids = {r["actor_id"] for r in page if r.get("actor_id")}
+    names = {}
+    if ids:
+        users = get_supabase().table(auth.TABLE).select("id, first_name, last_name").in_("id", list(ids)).execute()
+        names = {u["id"]: auth.full_name(u) for u in (users.data or [])}
+    is_dev = actor["role"] == "dev_admin"
+    for r in page:
+        r["actor_name"] = names.get(r.get("actor_id")) if r.get("actor_id") else None
+        if not is_dev and isinstance(r.get("metadata"), dict):
+            r["metadata"] = {k: v for k, v in r["metadata"].items() if k not in DEV_ONLY_METADATA}
+    return {"logs": page, "has_more": len(rows) > LOG_PAGE_SIZE}
+
+
+def _count(table: str, since: datetime, **eq) -> int:
+    query = get_supabase().table(table).select("id", count="exact").gte("created_at", since.isoformat())
+    for k, v in eq.items():
+        query = query.eq(k, v)
+    return query.limit(1).execute().count or 0
+
+
+@router.get("/admin/logs/summary")
+async def logs_summary(actor: dict = Depends(require_admin)):
+    from zoneinfo import ZoneInfo
+    now = datetime.now(timezone.utc)
+    eastern = now.astimezone(ZoneInfo("America/New_York"))
+    month_start = eastern.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
+    try:
+        return {
+            "visits_week": _count("logs", week_ago, event="page.visit"),
+            "leads_month": _count("contacts", month_start),
+            "intakes_month": _count("project_responses", month_start),
+            "posts_month": _count("field_posts", month_start),
+            "errors_day": _count("logs", now - timedelta(days=1), level="error"),
+        }
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Could not load summary: {type(exc).__name__}")

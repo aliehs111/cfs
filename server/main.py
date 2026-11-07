@@ -13,6 +13,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from auth import ensure_dev_admin
+from intake_store import start_sweeper
 from limiter import limiter
 from logger import log_event
 from notify import report_server_error
@@ -22,6 +24,8 @@ from routes.contact import router as contact_router
 from routes.admin import router as admin_router
 from routes.chat import router as chat_router
 from routes.field import router as field_router
+from routes.account import router as account_router
+from routes.users import router as users_router
 
 app = FastAPI(title="Cavalier Flooring API")
 app.state.limiter = limiter
@@ -50,6 +54,15 @@ async def on_unhandled_error(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "server_error"})
 
 
+@app.on_event("startup")
+def _start_background_jobs():
+    start_sweeper()
+    try:
+        ensure_dev_admin()
+    except Exception:
+        traceback.print_exc()
+
+
 app.add_exception_handler(RateLimitExceeded, on_rate_limited)
 app.add_exception_handler(StarletteHTTPException, on_http_error)
 app.add_exception_handler(Exception, on_unhandled_error)
@@ -62,7 +75,7 @@ app.add_middleware(
         os.environ.get("FRONTEND_URL", ""),
     ],
     allow_credentials=True,
-    allow_methods=["POST", "GET", "DELETE"],
+    allow_methods=["POST", "GET", "DELETE", "PATCH", "PUT"],
     allow_headers=["*"],
 )
 
@@ -72,6 +85,8 @@ app.include_router(contact_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(field_router, prefix="/api")
+app.include_router(account_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 
 
 @app.get("/api/health")

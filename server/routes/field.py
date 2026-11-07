@@ -1,42 +1,39 @@
-"""In the Field — staff-posted photos and videos from job sites.
+"""In the Field — staff-posted photos and videos from job sites, with comments.
 
-Public:  GET  /api/field/posts
-Staff:   POST /api/field/login | /logout, GET /api/field/session
-         POST /api/field/upload-url   -> signed URL; the browser uploads the file
-                                         straight to Supabase Storage (keeps large
-                                         videos off this server)
-         POST /api/field/posts        -> create a post from uploaded files
-         DELETE /api/field/posts/{id}
+Public:   GET  /api/field/posts                 (posts + their comments)
+Posters:  POST /api/field/upload-url            -> signed URL; the browser uploads the file
+                                                   straight to Supabase Storage (keeps large
+                                                   videos off this server)
+          POST /api/field/posts                 -> create a post from uploaded files
+          PATCH/DELETE /api/field/posts/{id}    -> own posts (admins: any)
+Accounts: POST /api/field/posts/{id}/comments   -> comment or reply (any signed-in role)
+          PATCH/DELETE /api/field/comments/{id} -> own comments (admins can delete any)
 
-Staff sign in with FIELD_PASSWORD (separate from ADMIN_PASSWORD so it can be
-shared with crews and rotated without touching admin). An admin session is
-also accepted for every staff action.
+Everyone signs in with their own account (specs.md §1). The shared
+FIELD_PASSWORD was retired Nov 2026.
 """
 
-import hashlib
-import hmac
 import os
-import time
 import traceback
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Cookie, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from limiter import client_ip, limiter
+import auth
+from limiter import limiter
 from logger import log_event
-from notify import alert, eastern_now, record_login_failure, render, site_url
-from routes.admin import _is_production, _signing_key, _verify_token as _verify_admin_token
+from notify import alert, eastern_now, render, site_url
 from supabase_client import get_supabase
 
 router = APIRouter()
 
 BUCKET = "field-media"
 TABLE = "field_posts"
-COOKIE_NAME = "cavalier_field_session"
-SESSION_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days — crews post from their phones
+COMMENTS = "field_comments"
 MAX_MEDIA_PER_POST = 10
+MAX_COMMENT_LENGTH = 2000
 PAGE_SIZE = 12
 
 EXTENSIONS = {
@@ -49,86 +46,24 @@ EXTENSIONS = {
     "video/webm": "webm",
 }
 
-
-# ---------------------------------------------------------------- auth
-
-def _field_password() -> str:
-    pw = os.environ.get("FIELD_PASSWORD")
-    if not pw:
-        raise HTTPException(status_code=500, detail="server misconfigured")
-    return pw
+require_poster = auth.require_roles(*auth.POSTER_ROLES)
+require_account = auth.require_roles()  # any role, password already changed
 
 
-def _sign(timestamp: str) -> str:
-    # "field:" prefix keeps these tokens from being valid admin tokens.
-    return hmac.new(_signing_key(), f"field:{timestamp}".encode(), hashlib.sha256).hexdigest()
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-def _make_token() -> str:
-    timestamp = str(int(time.time()))
-    return f"{timestamp}.{_sign(timestamp)}"
-
-
-def _verify_field_token(token: str | None) -> bool:
-    if not token or "." not in token:
-        return False
-    timestamp_str, sig = token.split(".", 1)
+def _check_uuid(value: str, what: str) -> None:
     try:
-        timestamp = int(timestamp_str)
+        uuid.UUID(value)
     except ValueError:
-        return False
-    if time.time() - timestamp > SESSION_TTL_SECONDS:
-        return False
-    return hmac.compare_digest(_sign(timestamp_str), sig)
+        raise HTTPException(status_code=404, detail=f"{what}_not_found")
 
 
-def _require_staff(field_token: str | None, admin_token: str | None) -> None:
-    if _verify_field_token(field_token) or _verify_admin_token(admin_token):
-        return
-    raise HTTPException(status_code=401, detail="unauthorized")
-
-
-class LoginPayload(BaseModel):
-    password: str
-
-
-@router.post("/field/login")
-@limiter.limit("10/minute")
-async def field_login(request: Request, payload: LoginPayload, response: Response):
-    if not hmac.compare_digest(payload.password.encode(), _field_password().encode()):
-        record_login_failure("field", client_ip(request), "/api/field/login")
-        raise HTTPException(status_code=401, detail="unauthorized")
-    log_event("auth.signed_in", route="/api/field/login", metadata={"login": "field"})
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=_make_token(),
-        httponly=True,
-        secure=_is_production(),
-        samesite="none" if _is_production() else "lax",
-        max_age=SESSION_TTL_SECONDS,
-        path="/",
-    )
-    return {"status": "ok"}
-
-
-@router.post("/field/logout")
-async def field_logout(response: Response):
-    response.delete_cookie(
-        COOKIE_NAME,
-        path="/",
-        secure=_is_production(),
-        samesite="none" if _is_production() else "lax",
-    )
-    return {"status": "ok"}
-
-
-@router.get("/field/session")
-async def field_session(
-    cavalier_field_session: str | None = Cookie(default=None),
-    cavalier_admin_session: str | None = Cookie(default=None),
-):
-    _require_staff(cavalier_field_session, cavalier_admin_session)
-    return {"status": "ok"}
+def _can_manage(user: dict, owner_id: str | None) -> bool:
+    """Owners manage their own things; admins manage everything."""
+    return user["role"] in auth.ADMIN_ROLES or (owner_id is not None and owner_id == user["id"])
 
 
 # ---------------------------------------------------------------- storage helpers
@@ -150,12 +85,7 @@ class UploadUrlPayload(BaseModel):
 
 
 @router.post("/field/upload-url")
-async def create_upload_url(
-    payload: UploadUrlPayload,
-    cavalier_field_session: str | None = Cookie(default=None),
-    cavalier_admin_session: str | None = Cookie(default=None),
-):
-    _require_staff(cavalier_field_session, cavalier_admin_session)
+async def create_upload_url(payload: UploadUrlPayload, staff: dict = Depends(require_poster)):
 
     content_type = payload.content_type.split(";")[0].strip().lower()
     ext = EXTENSIONS.get(content_type)
@@ -184,17 +114,11 @@ class MediaItem(BaseModel):
 class CreatePostPayload(BaseModel):
     caption: str = Field(default="", max_length=2000)
     location: str = Field(default="", max_length=200)
-    author: str = Field(default="", max_length=100)
     media: list[MediaItem]
 
 
 @router.post("/field/posts")
-async def create_post(
-    payload: CreatePostPayload,
-    cavalier_field_session: str | None = Cookie(default=None),
-    cavalier_admin_session: str | None = Cookie(default=None),
-):
-    _require_staff(cavalier_field_session, cavalier_admin_session)
+async def create_post(payload: CreatePostPayload, staff: dict = Depends(require_poster)):
 
     if not payload.media:
         raise HTTPException(status_code=400, detail="At least one photo or video is required.")
@@ -213,7 +137,8 @@ async def create_post(
     row = {
         "caption": payload.caption.strip(),
         "location": payload.location.strip(),
-        "author": payload.author.strip(),
+        "author": auth.full_name(staff),
+        "user_id": staff["id"],
         "media": media,
     }
     try:
@@ -223,11 +148,11 @@ async def create_post(
         raise HTTPException(status_code=500, detail=f"post_create_failed: {type(exc).__name__}")
 
     post = (res.data or [row])[0]
-    _post_created_alert(post, media)
+    _post_created_alert(post, media, staff)
     return {"post": post}
 
 
-def _post_created_alert(post: dict, media: list[dict]) -> None:
+def _post_created_alert(post: dict, media: list[dict], staff: dict) -> None:
     author = post.get("author") or "someone on the team"
     photos = sum(1 for m in media if m["type"] == "image")
     videos = len(media) - photos
@@ -236,7 +161,7 @@ def _post_created_alert(post: dict, media: list[dict]) -> None:
     )
     thumb = next((m["url"] for m in media if m["type"] == "image"), None)
     log_event("field_post.created", route="/api/field/posts", entity_type="field_post",
-              entity_id=post.get("id"), message=f"By {author}: {counts}")
+              actor_id=staff["id"], entity_id=post.get("id"), message=f"By {author}: {counts}")
     text, html = render(
         f"New In the Field post by {author}",
         [
@@ -253,22 +178,14 @@ def _post_created_alert(post: dict, media: list[dict]) -> None:
 
 
 @router.delete("/field/posts/{post_id}")
-async def delete_post(
-    post_id: str,
-    cavalier_field_session: str | None = Cookie(default=None),
-    cavalier_admin_session: str | None = Cookie(default=None),
-):
-    _require_staff(cavalier_field_session, cavalier_admin_session)
-    try:
-        uuid.UUID(post_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="post_not_found")
+async def delete_post(post_id: str, staff: dict = Depends(require_poster)):
+    _check_uuid(post_id, "post")
 
     supabase = get_supabase()
     try:
         res = (
             supabase.table(TABLE)
-            .select("media, caption, location, author, created_at")
+            .select("media, caption, location, author, user_id, created_at")
             .eq("id", post_id)
             .limit(1)
             .execute()
@@ -276,6 +193,8 @@ async def delete_post(
         if not res.data:
             raise HTTPException(status_code=404, detail="post_not_found")
         deleted = res.data[0]
+        if not _can_manage(staff, deleted.get("user_id")):
+            raise HTTPException(status_code=403, detail="You can only delete your own posts.")
         paths = [m["path"] for m in (deleted.get("media") or []) if m.get("path")]
         supabase.table(TABLE).delete().eq("id", post_id).execute()
     except HTTPException:
@@ -291,9 +210,9 @@ async def delete_post(
             # Post is already gone from the site; orphaned files are harmless.
             traceback.print_exc()
 
-    # Until user accounts exist (§1), all we know is which password was used.
-    deleted_by = "an admin" if _verify_admin_token(cavalier_admin_session) else "someone signed in to In the Field"
+    deleted_by = auth.full_name(staff)
     log_event("field_post.deleted", route=f"/api/field/posts/{post_id}", entity_type="field_post",
+              actor_id=staff["id"],
               entity_id=post_id, message=f"Deleted by {deleted_by}",
               metadata={"author": deleted.get("author"), "caption": (deleted.get("caption") or "")[:200]})
     created = deleted.get("created_at") or ""
@@ -313,6 +232,158 @@ async def delete_post(
     return {"status": "ok"}
 
 
+class UpdatePostPayload(BaseModel):
+    caption: str | None = Field(default=None, max_length=2000)
+    location: str | None = Field(default=None, max_length=200)
+
+
+@router.patch("/field/posts/{post_id}")
+async def update_post(post_id: str, payload: UpdatePostPayload, staff: dict = Depends(require_poster)):
+    _check_uuid(post_id, "post")
+    sb = get_supabase()
+    res = sb.table(TABLE).select("id, user_id").eq("id", post_id).limit(1).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="post_not_found")
+    if not _can_manage(staff, res.data[0].get("user_id")):
+        raise HTTPException(status_code=403, detail="You can only edit your own posts.")
+    changes = {k: v.strip() for k, v in payload.model_dump().items() if v is not None}
+    if not changes:
+        raise HTTPException(status_code=400, detail="Nothing to change.")
+    updated = sb.table(TABLE).update(changes).eq("id", post_id).execute().data[0]
+    log_event("field_post.edited", route=f"/api/field/posts/{post_id}", actor_id=staff["id"],
+              entity_type="field_post", entity_id=post_id, metadata=changes)
+    return {"post": updated}
+
+
+# ---------------------------------------------------------------- comments
+
+def _public_comment(c: dict, names: dict[str, str]) -> dict:
+    deleted = bool(c.get("deleted_at"))
+    return {
+        "id": c["id"],
+        "post_id": c["post_id"],
+        "parent_id": c.get("parent_id"),
+        "user_id": None if deleted else c.get("user_id"),
+        "author": None if deleted else names.get(c.get("user_id"), "Former team member"),
+        "body": None if deleted else c.get("body"),
+        "deleted": deleted,
+        "created_at": c.get("created_at"),
+        "edited_at": None if deleted else c.get("edited_at"),
+    }
+
+
+def _names_for(user_ids: set[str]) -> dict[str, str]:
+    if not user_ids:
+        return {}
+    res = (
+        get_supabase().table(auth.TABLE).select("id, first_name, last_name")
+        .in_("id", list(user_ids)).execute()
+    )
+    return {u["id"]: auth.full_name(u) for u in (res.data or [])}
+
+
+def _comments_for(post_ids: list[str]) -> dict[str, list[dict]]:
+    if not post_ids:
+        return {}
+    rows = (
+        get_supabase().table(COMMENTS)
+        .select("id, post_id, parent_id, user_id, body, created_at, edited_at, deleted_at")
+        .in_("post_id", post_ids).order("created_at").execute().data or []
+    )
+    # A removed comment with no live replies has nothing left to show.
+    live_parents = {r["parent_id"] for r in rows if r.get("parent_id") and not r.get("deleted_at")}
+    rows = [r for r in rows if not r.get("deleted_at") or r["id"] in live_parents]
+    names = _names_for({r["user_id"] for r in rows if r.get("user_id")})
+    by_post: dict[str, list[dict]] = {}
+    for r in rows:
+        by_post.setdefault(r["post_id"], []).append(_public_comment(r, names))
+    return by_post
+
+
+def _clean_body(body: str) -> str:
+    body = body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Write something first.")
+    if len(body) > MAX_COMMENT_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Comments are limited to {MAX_COMMENT_LENGTH} characters.")
+    return body
+
+
+class CommentPayload(BaseModel):
+    body: str
+    parent_id: str | None = None
+
+
+@router.post("/field/posts/{post_id}/comments")
+@limiter.limit("30/hour")
+async def create_comment(request: Request, post_id: str, payload: CommentPayload,
+                         user: dict = Depends(require_account)):
+    _check_uuid(post_id, "post")
+    body = _clean_body(payload.body)
+    sb = get_supabase()
+    if not sb.table(TABLE).select("id").eq("id", post_id).eq("is_public", True).limit(1).execute().data:
+        raise HTTPException(status_code=404, detail="post_not_found")
+    if payload.parent_id:
+        _check_uuid(payload.parent_id, "comment")
+        parent = sb.table(COMMENTS).select("post_id, parent_id, deleted_at").eq("id", payload.parent_id) \
+            .limit(1).execute().data
+        if not parent or parent[0]["post_id"] != post_id:
+            raise HTTPException(status_code=404, detail="comment_not_found")
+        if parent[0].get("parent_id"):
+            raise HTTPException(status_code=400, detail="Reply to the original comment instead.")
+        if parent[0].get("deleted_at"):
+            raise HTTPException(status_code=400, detail="That comment was removed.")
+    row = sb.table(COMMENTS).insert({
+        "post_id": post_id, "parent_id": payload.parent_id, "user_id": user["id"], "body": body,
+    }).execute().data[0]
+    log_event("comment.created", route=f"/api/field/posts/{post_id}/comments", actor_id=user["id"],
+              entity_type="field_comment", entity_id=row["id"],
+              message=f"{auth.full_name(user)}: {body[:120]}",
+              metadata={"post_id": post_id, "reply": bool(payload.parent_id)})
+    return {"comment": _public_comment(row, {user["id"]: auth.full_name(user)})}
+
+
+def _load_comment(comment_id: str) -> dict:
+    _check_uuid(comment_id, "comment")
+    rows = get_supabase().table(COMMENTS).select("*").eq("id", comment_id).limit(1).execute().data
+    if not rows or rows[0].get("deleted_at"):
+        raise HTTPException(status_code=404, detail="comment_not_found")
+    return rows[0]
+
+
+class EditCommentPayload(BaseModel):
+    body: str
+
+
+@router.patch("/field/comments/{comment_id}")
+async def edit_comment(comment_id: str, payload: EditCommentPayload, user: dict = Depends(require_account)):
+    comment = _load_comment(comment_id)
+    if comment["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="You can only edit your own comments.")
+    body = _clean_body(payload.body)
+    row = get_supabase().table(COMMENTS).update({"body": body, "edited_at": _now()}) \
+        .eq("id", comment_id).execute().data[0]
+    log_event("comment.edited", route=f"/api/field/comments/{comment_id}", actor_id=user["id"],
+              entity_type="field_comment", entity_id=comment_id, message=body[:120])
+    return {"comment": _public_comment(row, {user["id"]: auth.full_name(user)})}
+
+
+@router.delete("/field/comments/{comment_id}")
+async def delete_comment(comment_id: str, user: dict = Depends(require_account)):
+    comment = _load_comment(comment_id)
+    if not _can_manage(user, comment["user_id"]):
+        raise HTTPException(status_code=403, detail="You can only delete your own comments.")
+    # Soft delete keeps reply threads intact; the text is hidden from the site
+    # but kept for the record.
+    get_supabase().table(COMMENTS).update({"deleted_at": _now(), "deleted_by": user["id"]}) \
+        .eq("id", comment_id).execute()
+    log_event("comment.deleted", route=f"/api/field/comments/{comment_id}", actor_id=user["id"],
+              entity_type="field_comment", entity_id=comment_id,
+              message=f"Removed by {auth.full_name(user)}",
+              metadata={"author_id": comment["user_id"], "body": (comment.get("body") or "")[:200]})
+    return {"status": "ok"}
+
+
 # ---------------------------------------------------------------- public feed
 
 @router.get("/field/posts")
@@ -322,7 +393,7 @@ async def list_posts(before: str | None = None):
         query = (
             get_supabase()
             .table(TABLE)
-            .select("id, caption, location, author, media, created_at")
+            .select("id, caption, location, author, user_id, media, created_at")
             .eq("is_public", True)
             .order("created_at", desc=True)
             .limit(PAGE_SIZE + 1)
@@ -335,4 +406,13 @@ async def list_posts(before: str | None = None):
         raise HTTPException(status_code=500, detail=f"posts_fetch_failed: {type(exc).__name__}")
 
     rows = res.data or []
-    return {"posts": rows[:PAGE_SIZE], "has_more": len(rows) > PAGE_SIZE}
+    posts = rows[:PAGE_SIZE]
+    try:
+        comments = _comments_for([p["id"] for p in posts])
+    except Exception:
+        # Comments are secondary: show the posts even if they can't load.
+        traceback.print_exc()
+        comments = {}
+    for p in posts:
+        p["comments"] = comments.get(p["id"], [])
+    return {"posts": posts, "has_more": len(rows) > PAGE_SIZE}

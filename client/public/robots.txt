@@ -2,6 +2,7 @@
 # (Not a security measure; those pages are password-protected.)
 User-agent: *
 Disallow: /admin
+Disallow: /login
 Disallow: /in-the-field/post
 
 # TODO (specs.md §3): add "Sitemap: https://<domain>/sitemap.xml" once the

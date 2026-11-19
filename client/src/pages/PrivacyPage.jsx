@@ -144,9 +144,6 @@ export default function PrivacyPage() {
             .
           </p>
 
-          <H2>Children</H2>
-          <p style={body}>This website is for businesses and isn’t directed at children under 13.</p>
-
           <H2>Changes</H2>
           <p style={body}>
             If we change how we handle information, we’ll update this page and the date at the top.

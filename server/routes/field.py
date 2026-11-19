@@ -11,12 +11,20 @@ Accounts: POST /api/field/posts/{id}/comments   -> comment or reply (any signed-
 
 Everyone signs in with their own account (specs.md §1). The shared
 FIELD_PASSWORD was retired Nov 2026.
+
+Sections (Nov 19 2026): each post belongs to one page. "field" is In the
+Field; "day-in-the-life" is A Day in the Life (tongue-in-cheek photos of what
+crews walk into). GET /api/field/posts?section=... lists one section. Needs
+the `section` column (schema.sql, "SECTIONS" block); until it's added,
+In the Field keeps working and A Day in the Life is simply empty.
 """
 
 import os
 import traceback
 import uuid
 from datetime import datetime, timezone
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -35,6 +43,13 @@ COMMENTS = "field_comments"
 MAX_MEDIA_PER_POST = 10
 MAX_COMMENT_LENGTH = 2000
 PAGE_SIZE = 12
+
+DEFAULT_SECTION = "field"
+SECTION_PAGES = {
+    "field": ("In the Field", "/in-the-field"),
+    "day-in-the-life": ("A Day in the Life", "/day-in-the-life"),
+}
+Section = Literal["field", "day-in-the-life"]
 
 EXTENSIONS = {
     "image/jpeg": "jpg",
@@ -115,6 +130,7 @@ class CreatePostPayload(BaseModel):
     caption: str = Field(default="", max_length=2000)
     location: str = Field(default="", max_length=200)
     media: list[MediaItem]
+    section: Section = DEFAULT_SECTION
 
 
 @router.post("/field/posts")
@@ -141,6 +157,10 @@ async def create_post(payload: CreatePostPayload, staff: dict = Depends(require_
         "user_id": staff["id"],
         "media": media,
     }
+    # Only set when not the default, so In the Field posting keeps working
+    # even before the `section` column has been added.
+    if payload.section != DEFAULT_SECTION:
+        row["section"] = payload.section
     try:
         res = get_supabase().table(TABLE).insert(row).execute()
     except Exception as exc:
@@ -160,10 +180,11 @@ def _post_created_alert(post: dict, media: list[dict], staff: dict) -> None:
         f"{n} {label}{'s' if n != 1 else ''}" for n, label in ((photos, "photo"), (videos, "video")) if n
     )
     thumb = next((m["url"] for m in media if m["type"] == "image"), None)
+    page_name, page_path = SECTION_PAGES.get(post.get("section") or DEFAULT_SECTION, SECTION_PAGES[DEFAULT_SECTION])
     log_event("field_post.created", route="/api/field/posts", entity_type="field_post",
-              actor_id=staff["id"], entity_id=post.get("id"), message=f"By {author}: {counts}")
+              actor_id=staff["id"], entity_id=post.get("id"), message=f"By {author} on {page_name}: {counts}")
     text, html = render(
-        f"New In the Field post by {author}",
+        f"New {page_name} post by {author}",
         [
             ("Posted by", post.get("author")),
             ("Location", post.get("location")),
@@ -171,10 +192,10 @@ def _post_created_alert(post: dict, media: list[dict], staff: dict) -> None:
             ("Posted", eastern_now()),
         ],
         [("Caption", post.get("caption"))],
-        link=("See it on In the Field", site_url("/in-the-field")),
+        link=(f"See it on {page_name}", site_url(page_path)),
         image_url=thumb,
     )
-    alert("field_post_created", f"New In the Field post by {author}", text, html)
+    alert("field_post_created", f"New {page_name} post by {author}", text, html)
 
 
 @router.delete("/field/posts/{post_id}")
@@ -238,6 +259,8 @@ class UpdatePostPayload(BaseModel):
     # Optional: the post's photos/videos in order. Existing ones are kept or
     # dropped (dropped files are deleted); new ones come from /upload-url.
     media: list[MediaItem] | None = None
+    # Optional: move the post to the other page.
+    section: Section | None = None
 
 
 @router.patch("/field/posts/{post_id}")
@@ -256,6 +279,8 @@ async def update_post(post_id: str, payload: UpdatePostPayload, staff: dict = De
         value = getattr(payload, key)
         if value is not None:
             changes[key] = value.strip()
+    if payload.section is not None:
+        changes["section"] = payload.section
 
     removed_paths: list[str] = []
     if payload.media is not None:
@@ -433,21 +458,34 @@ async def delete_comment(comment_id: str, user: dict = Depends(require_account))
 
 # ---------------------------------------------------------------- public feed
 
+def _list_query(before: str | None, section: str | None):
+    """One page of public posts, newest first. section=None means no section
+    filter (used only before the `section` column exists)."""
+    columns = "id, caption, location, author, user_id, media, created_at"
+    query = get_supabase().table(TABLE).select(columns + (", section" if section else ""))
+    query = query.eq("is_public", True)
+    if section:
+        query = query.eq("section", section)
+    query = query.order("created_at", desc=True).limit(PAGE_SIZE + 1)
+    if before:
+        query = query.lt("created_at", before)
+    return query.execute()
+
+
 @router.get("/field/posts")
-async def list_posts(before: str | None = None):
-    """Newest first, PAGE_SIZE at a time. Pass the last post's created_at as `before`."""
+async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTION):
+    """Newest first, PAGE_SIZE at a time, for one page (section). Pass the last
+    post's created_at as `before`."""
     try:
-        query = (
-            get_supabase()
-            .table(TABLE)
-            .select("id, caption, location, author, user_id, media, created_at")
-            .eq("is_public", True)
-            .order("created_at", desc=True)
-            .limit(PAGE_SIZE + 1)
-        )
-        if before:
-            query = query.lt("created_at", before)
-        res = query.execute()
+        try:
+            res = _list_query(before, section)
+        except Exception:
+            # Most likely the `section` column hasn't been added yet (schema.sql).
+            # Every existing post is In the Field then; A Day in the Life is empty.
+            traceback.print_exc()
+            if section != DEFAULT_SECTION:
+                return {"posts": [], "has_more": False}
+            res = _list_query(before, None)
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"posts_fetch_failed: {type(exc).__name__}")

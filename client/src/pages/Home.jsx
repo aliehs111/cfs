@@ -1,7 +1,15 @@
 import adhesive from '../../assets/adhesive_trowel.jpg'
+import { BUSINESS } from '../seo'
 
 export default function Home() {
   return (
+    <>
+    {/* Business details for Google (name, phone, since 1981, service area,
+        services). Settings in src/seo.js. */}
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(BUSINESS).replace(/</g, '\\u003c') }}
+    />
     <section
       className="relative overflow-hidden w-full"
       style={{
@@ -105,5 +113,6 @@ export default function Home() {
         </p>
       </div>
     </section>
+    </>
   )
 }

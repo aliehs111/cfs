@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { apiFetch, isAdmin, readError } from '../lib/auth'
 
 const MAX_LENGTH = 2000
@@ -43,6 +43,9 @@ function timeAgo(iso) {
 }
 
 export default function FieldComments({ post, user }) {
+  // After signing in, come back to this page (In the Field or A Day in the Life).
+  const { pathname } = useLocation()
+  const loginPath = `/login?next=${encodeURIComponent(pathname)}`
   const [comments, setComments] = useState(post.comments || [])
   const liveCount = comments.filter((c) => !c.deleted).length
   const [open, setOpen] = useState(false)
@@ -70,7 +73,7 @@ export default function FieldComments({ post, user }) {
         </button>
       )}
       {!label && (
-        <Link to="/login?next=/in-the-field" style={{ ...quiet, textDecoration: 'none' }}>
+        <Link to={loginPath} style={{ ...quiet, textDecoration: 'none' }}>
           Sign in to comment
         </Link>
       )}
@@ -93,7 +96,7 @@ export default function FieldComments({ post, user }) {
           {user ? (
             <Composer postId={post.id} onPosted={added} placeholder="Add a comment" />
           ) : (
-            <Link to="/login?next=/in-the-field" style={{ ...quiet, textDecoration: 'none' }}>
+            <Link to={loginPath} style={{ ...quiet, textDecoration: 'none' }}>
               Sign in to comment
             </Link>
           )}

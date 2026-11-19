@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { readPreload } from '../preload'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -13,8 +14,11 @@ const PROJECT_TYPES = [
 ]
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Saved into the page at build time (so the list is in the HTML for search
+  // engines); still refreshed from the API below.
+  const preloaded = readPreload('/projects')?.projects
+  const [projects, setProjects] = useState(preloaded || [])
+  const [loading, setLoading] = useState(!preloaded)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
@@ -31,13 +35,15 @@ export default function ProjectsPage() {
       })
       .catch(() => {
         if (!cancelled) {
-          setError('Failed to load projects.')
+          // Keep the list saved into the page at build time, if there is one.
+          if (!preloaded) setError('Failed to load projects.')
           setLoading(false)
         }
       })
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on load; `preloaded` is fixed for the page
   }, [])
 
   const filtered = projects.filter((p) => {

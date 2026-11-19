@@ -6,5 +6,5 @@ Disallow: /login
 Disallow: /my-alerts
 Disallow: /in-the-field/post
 
-# TODO (specs.md §3): add "Sitemap: https://<domain>/sitemap.xml" once the
-# site is on the client's domain and a sitemap is generated.
+# The "Sitemap:" line is added automatically at build time once VITE_SITE_URL
+# is set on the Railway frontend service (scripts/prerender.mjs, specs.md §3).

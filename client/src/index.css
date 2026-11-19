@@ -110,6 +110,13 @@ main {
   border-bottom-color: var(--maroon);
 }
 
+
+/* Items in the desktop header dropdowns (Nav.jsx) */
+.dropdown-link:hover,
+.dropdown-link:focus-visible {
+  background-color: rgba(236, 228, 215, 0.06);
+}
+
 /* Staff entrance on the In the Field page */
 .hard-hat-link {
   display: inline-flex;
@@ -162,6 +169,14 @@ main {
   outline: none;
   transition: border-color 0.2s ease;
   min-width: 220px;
+}
+
+/* "How can we help?" text boxes (ProjectIntake.jsx): the placeholder is a
+   faint, italic prompt so it can't be mistaken for text already typed in. */
+.intake-input::placeholder {
+  color: rgba(236, 228, 215, 0.32);
+  font-style: italic;
+  opacity: 1; /* Firefox dims placeholders on its own */
 }
 
 .search-input::placeholder {
@@ -392,12 +407,98 @@ main {
   color: rgba(236, 228, 215, 0.85);
 }
 
-/* ---------------------------------------------------------------- About photo (Nov 2026)
-   Colour treatment for the About page background photo (AboutPage.jsx).
-   --about-photo-filter adjusts the photo; --about-photo-tint is laid over it
-   with "multiply" (a colour wash; transparent = none). The ivory fade on top
-   keeps the text side clean. */
+/* ---------------------------------------------------------------- Contact photo (Nov 2026)
+   Same treatment as /discuss, for the background photo on /contact
+   (Contact.jsx). Tune here. The photo's left side is a bright white wash, so
+   the overlay is a bit heavier than Discuss's to keep text readable there. */
 :root {
-  --about-photo-filter: saturate(0.45) sepia(0.15) contrast(0.95);
-  --about-photo-tint: rgba(117, 111, 106, 0.35); /* warm stone #756F6A */
+  --contact-photo-filter: saturate(0.6) brightness(0.85);
+  --contact-photo-overlay: linear-gradient(
+    180deg,
+    rgba(26, 24, 22, 0.98) 0%,
+    rgba(26, 24, 22, 0.94) 16%,
+    rgba(26, 24, 22, 0.78) 34%,
+    rgba(26, 24, 22, 0.78) 50%,
+    rgba(26, 24, 22, 0.86) 82%,
+    #1a1816 100%
+  );
+}
+/* The form's dark theme (made for the solid-colour pop-up) is too faint over
+   a photo: brighten its labels, notes and field underlines on this page only.
+   Underlines skip :focus so the white focus line still shows. */
+.contact-over-photo .contact-form-col :is(label, p:not([role="alert"])) {
+  color: rgba(236, 228, 215, 0.88) !important;
+}
+.contact-over-photo .contact-form-col :is(input, textarea, select):not(:focus) {
+  border-bottom-color: rgba(236, 228, 215, 0.5) !important;
+}
+/* Small rose label: soft halo in the page colour for the photo's bright spots. */
+.contact-over-photo .contact-label {
+  text-shadow: 0 0 2px rgba(26, 24, 22, 0.95), 0 0 10px rgba(26, 24, 22, 0.9), 0 0 22px rgba(26, 24, 22, 0.8);
+}
+
+/* ---------------------------------------------------------------- About photo (Nov 2026)
+   The Motorola photo behind the About copy (AboutPage.jsx), Nov 19 2026.
+   Goal: on laptop/desktop the whole page, footer included, fits the window
+   with no scrolling, and feels cinematic: the photo runs from under the menu
+   to the bottom of the window, and the footer sits over it with no charcoal
+   band (.footer-over-photo below; the header stays solid). The photo fills
+   the page's height, with extra plain grey at the bottom so the phone stays
+   above the footer text; spacing and heading size shrink with the window's
+   height. On very short windows the page scrolls a little rather than
+   shrinking text below a readable size.
+   No filter for now; the owner will direct the treatment. */
+:root {
+  --about-photo-filter: none;
+
+  /* Text column (laptop/desktop). Left edge matches the page container
+     (56px padding, centred 1280px column on wide screens). */
+  --about-copy-left: max(56px, calc(50vw - 640px));
+  /* Third value: keeps the whole phone (antenna included, ~0.63 × the
+     photo's height) inside the window on tall screens. */
+  --about-copy-width: min(
+    44rem,
+    calc(50vw - 56px),
+    calc(100vw - 0.63 * (100vh - var(--nav-h)) - 24px - var(--about-copy-left) - var(--about-photo-gap))
+  );
+  /* Space between the end of the text column and the phone. */
+  --about-photo-gap: 96px;
+  --about-phone-left: calc(var(--about-copy-left) + var(--about-copy-width) + var(--about-photo-gap));
+
+  /* Spacing and heading size: scale with window height, within limits. */
+  --about-h1-size: clamp(2.25rem, min(5vw, 6.5vh), 4rem);
+  --about-pad-y: clamp(1.25rem, 3.5vh, 4rem);
+  --about-gap-lg: clamp(1rem, 2.7vh, 3rem);
+  --about-gap-md: clamp(0.875rem, 2.5vh, 2.5rem);
+  --about-gap-p: clamp(0.625rem, 2vh, 1.5rem);
+  /* Height of the footer laid over the photo, kept clear below the text. */
+  --about-footer-h: 7rem;
+  /* Height of the sticky menu bar (the photo pins just below it). */
+  --nav-h: 74px;
+}
+/* The side-by-side photo layout starts at 1280px (AboutPage.jsx uses xl:);
+   below that the photo sits above the text and the footer is the normal one. */
+@media (min-width: 1280px) {
+  .about-copy {
+    /* Heading also scales with the text column, so "Commercial flooring,"
+       always fits on one line (~9.6× the font size wide). */
+    --about-h1-size: clamp(2.25rem, min(5vw, 6.5vh, calc(var(--about-copy-width) / 9.6)), 4rem);
+    padding-top: var(--about-pad-y);
+    padding-bottom: calc(var(--about-pad-y) + var(--about-footer-h));
+  }
+  /* Footer over the page's photo (Footer.jsx, OVER_PHOTO_PATHS): taken out of
+     the layout and laid over the bottom of the page, with no charcoal band
+     or top line. The page above then runs to the bottom of the window. */
+  #root {
+    position: relative;
+  }
+  .footer-over-photo {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    background-color: transparent !important;
+    border-top: none !important;
+  }
 }

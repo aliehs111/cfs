@@ -190,7 +190,7 @@ function EditForm({ post, onSaved, onCancel, onUnauthorized }) {
         {media.map((m) => (
           <div key={m.key} className="relative" style={{ aspectRatio: '1', backgroundColor: 'rgba(236,228,215,0.06)' }}>
             {m.type === 'video' ? (
-              <video src={m.url} muted playsInline preload="metadata" className="w-full h-full" style={{ objectFit: 'cover' }} />
+              <video src={m.url.includes('#') ? m.url : `${m.url}#t=0.001`} muted playsInline preload="metadata" className="w-full h-full" style={{ objectFit: 'cover' }} />
             ) : (
               <img src={m.url} alt="" className="w-full h-full" style={{ objectFit: 'cover', opacity: m.status === 'done' ? 1 : 0.4 }} />
             )}

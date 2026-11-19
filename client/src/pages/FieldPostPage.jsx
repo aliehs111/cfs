@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FieldPostCard } from './FieldPage'
+import { FIELD_SECTIONS, SECTION_PATHS } from '../fieldSections'
 import FieldPostEditor from '../components/FieldPostEditor'
 import { apiFetch, canPost, isAdmin, useCurrentUser } from '../lib/auth'
 import { fileType, prepareImage, putWithProgress } from '../lib/upload'
@@ -95,7 +96,17 @@ export default function FieldPostPage() {
   )
 }
 
+const CAPTION_PLACEHOLDERS = {
+  field: 'e.g. Leveling the second floor slab before LVT goes down.',
+  'day-in-the-life': 'e.g. “Can you start on the 14th floor today?”',
+}
+
 function PostManager({ user, onUnauthorized }) {
+  // Which page the post goes to; ?section= presets it (the posting link on
+  // each page passes its own section).
+  const [params, setParams] = useSearchParams()
+  const section = SECTION_PATHS[params.get('section')] ? params.get('section') : 'field'
+  const chooseSection = (next) => setParams(next === 'field' ? {} : { section: next }, { replace: true })
   const [items, setItems] = useState([]) // { id, file, type, preview }
   const [caption, setCaption] = useState('')
   const [location, setLocation] = useState('')
@@ -112,22 +123,23 @@ function PostManager({ user, onUnauthorized }) {
   // Free preview memory when leaving the page.
   useEffect(() => () => itemsRef.current.forEach((i) => URL.revokeObjectURL(i.preview)), [])
 
+  // Recent posts for the chosen page.
   const loadRecent = () =>
-    apiFetch('/api/field/posts')
+    apiFetch(`/api/field/posts?section=${section}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setRecent(d.posts || []))
       .catch(() => {})
 
   useEffect(() => {
     let cancelled = false
-    apiFetch('/api/field/posts')
+    apiFetch(`/api/field/posts?section=${section}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => !cancelled && setRecent(d.posts || []))
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [section])
 
   const addFiles = (fileList) => {
     setError('')
@@ -196,7 +208,7 @@ function PostManager({ user, onUnauthorized }) {
       setProgress('Publishing…')
       const res = await apiFetch('/api/field/posts', {
         method: 'POST',
-        body: JSON.stringify({ caption, location, media }),
+        body: JSON.stringify({ caption, location, media, section }),
       })
       if (res.status === 401 || res.status === 403) return onUnauthorized()
       if (!res.ok) throw new Error('Could not publish the post.')
@@ -240,13 +252,46 @@ function PostManager({ user, onUnauthorized }) {
       {status === 'done' && (
         <p style={{ marginTop: '1.5rem', fontSize: '0.9rem', color: 'var(--off-white)' }}>
           Posted.{' '}
-          <Link to="/in-the-field" style={{ color: 'var(--off-white)', borderBottom: '1px solid var(--maroon)', textDecoration: 'none' }}>
+          <Link to={SECTION_PATHS[section]} style={{ color: 'var(--off-white)', borderBottom: '1px solid var(--maroon)', textDecoration: 'none' }}>
             See it on the site →
           </Link>
         </p>
       )}
 
       <form onSubmit={submit}>
+        <span style={labelStyle}>Post to</span>
+        <div className="flex gap-3 mt-3" role="radiogroup" aria-label="Post to">
+          {Object.keys(SECTION_PATHS).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={section === key}
+              disabled={uploading}
+              onClick={() => chooseSection(key)}
+              className="uppercase"
+              style={{
+                flex: 1,
+                padding: '0.8rem 0.5rem',
+                fontSize: '0.7rem',
+                letterSpacing: '0.14em',
+                cursor: uploading ? 'default' : 'pointer',
+                color: 'var(--off-white)',
+                background: section === key ? 'rgba(236,228,215,0.1)' : 'transparent',
+                border: `1px solid ${section === key ? 'var(--off-white)' : 'rgba(236,228,215,0.25)'}`,
+              }}
+            >
+              {FIELD_SECTIONS[key].title}
+            </button>
+          ))}
+        </div>
+        {section === 'day-in-the-life' && (
+          <p style={{ fontSize: '0.8rem', lineHeight: 1.6, opacity: 0.7, marginTop: '0.8rem' }}>
+            Keep it light and anonymous: no company names, logos, signs, faces or anything that identifies the job or
+            the contractor. The joke is the situation, never a customer.
+          </p>
+        )}
+
         <span style={labelStyle}>Photos & videos</span>
         <div className="grid grid-cols-3 gap-2 mt-3">
           {items.map((item) => (
@@ -256,7 +301,7 @@ function PostManager({ user, onUnauthorized }) {
               style={{ aspectRatio: '1', backgroundColor: 'rgba(236,228,215,0.06)' }}
             >
               {item.type.startsWith('video/') ? (
-                <video src={item.preview} muted playsInline preload="metadata" className="w-full h-full" style={{ objectFit: 'cover' }} />
+                <video src={item.preview.includes('#') ? item.preview : `${item.preview}#t=0.001`} muted playsInline preload="metadata" className="w-full h-full" style={{ objectFit: 'cover' }} />
               ) : (
                 <img src={item.preview} alt="" className="w-full h-full" style={{ objectFit: 'cover' }} />
               )}
@@ -333,7 +378,7 @@ function PostManager({ user, onUnauthorized }) {
           onChange={(e) => setCaption(e.target.value)}
           rows={3}
           maxLength={2000}
-          placeholder="e.g. Leveling the second floor slab before LVT goes down."
+          placeholder={CAPTION_PLACEHOLDERS[section]}
           disabled={uploading}
           style={{ ...inputStyle, resize: 'vertical' }}
         />

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import FieldComments from '../components/FieldComments'
 import FieldPostEditor from '../components/FieldPostEditor'
 import { canPost, isAdmin, useCurrentUser } from '../lib/auth'
+import { FIELD_SECTIONS, SECTION_PATHS } from '../fieldSections'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -17,7 +18,9 @@ function formatPostDate(iso) {
 
 const VIEW_KEY = 'cavalier_field_view'
 
-export default function FieldPage() {
+export default function FieldPage({ section = 'field' }) {
+  const copy = FIELD_SECTIONS[section] || FIELD_SECTIONS.field
+  const postPath = `/in-the-field/post?section=${section}`
   const [posts, setPosts] = useState([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -44,6 +47,7 @@ export default function FieldPage() {
 
   const load = async (before) => {
     const url = new URL(`${API_BASE}/api/field/posts`, window.location.origin)
+    url.searchParams.set('section', section)
     if (before) url.searchParams.set('before', before)
     const res = await fetch(url)
     if (!res.ok) throw new Error('failed')
@@ -63,6 +67,7 @@ export default function FieldPage() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the route remounts this page per section (key in App.jsx)
   }, [])
 
   const loadMore = async () => {
@@ -81,15 +86,34 @@ export default function FieldPage() {
   return (
     // Stone background with white text; see .field-stone in index.css.
     <div className="field-stone" style={{ minHeight: 'calc(100vh - 74px)' }}>
-    <section className="w-full max-w-7xl mx-auto px-6 py-24">
-      <div className="flex items-start justify-between">
-        <p
-          className="uppercase"
-          style={{ color: 'var(--maroon-text)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: 0 }}
-        >
-          From our crews
-        </p>
-        <div className="flex items-center gap-5">
+    <section className="w-full max-w-7xl mx-auto px-6 pt-12 md:pt-16 pb-24">
+      {/* Heading and the staff controls share one row, so there's no empty
+          band above the title (Nov 19 2026). */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          {copy.eyebrow && (
+            <p
+              className="uppercase"
+              style={{ color: 'var(--maroon-text)', letterSpacing: '0.16em', fontSize: '0.7rem', margin: '0 0 1rem' }}
+            >
+              {copy.eyebrow}
+            </p>
+          )}
+          <h1
+            className="font-display"
+            style={{
+              fontSize: 'clamp(2.5rem, 7vw, 5rem)',
+              letterSpacing: '-0.02em',
+              color: 'var(--off-white)',
+              lineHeight: 0.95,
+              margin: 0,
+            }}
+          >
+            {/* One page, two tabs: the heading stays "In the Field". */}
+            {FIELD_SECTIONS.field.title}
+          </h1>
+        </div>
+        <div className="flex items-center gap-5 shrink-0" style={{ paddingTop: '0.6rem' }}>
           {user && (
             <span style={{ fontSize: '0.75rem', color: 'var(--off-white)', opacity: 0.55 }}>
               {user.name} ·{' '}
@@ -105,8 +129,8 @@ export default function FieldPage() {
           {/* Staff entrance: quiet but always visible, since phones can't hover */}
           {(!user || canPost(user)) && (
             <Link
-              to={user ? '/in-the-field/post' : '/login?next=/in-the-field/post'}
-              aria-label={user ? 'Post to In the Field' : 'Team sign-in'}
+              to={user ? postPath : `/login?next=${encodeURIComponent(postPath)}`}
+              aria-label={user ? `Post to ${copy.title}` : 'Team sign-in'}
               title={user ? 'New post' : 'Team sign-in'}
               className="hard-hat-link"
             >
@@ -115,32 +139,23 @@ export default function FieldPage() {
           )}
         </div>
       </div>
-      <h1
-        className="font-display"
-        style={{
-          fontSize: 'clamp(2.5rem, 7vw, 5rem)',
-          letterSpacing: '-0.02em',
-          color: 'var(--off-white)',
-          lineHeight: 0.95,
-          marginTop: '1rem',
-        }}
-      >
-        In the Field
-      </h1>
-      <p
-        style={{
-          maxWidth: '38rem',
-          marginTop: '1.5rem',
-          fontSize: '0.95rem',
-          lineHeight: 1.8,
-          color: 'var(--off-white)',
-          opacity: 0.7,
-        }}
-      >
-        What we're working on right now, posted by the people doing the work.
-      </p>
+      {copy.intro && (
+        <p
+          style={{
+            maxWidth: '38rem',
+            marginTop: '1.5rem',
+            fontSize: '0.95rem',
+            lineHeight: 1.8,
+            color: 'var(--off-white)',
+            opacity: 0.7,
+          }}
+        >
+          {copy.intro}
+        </p>
+      )}
 
-      <div className="flex justify-end mt-10">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-5 mt-8">
+        <SectionTabs />
         <ViewToggle view={view} onChange={chooseView} />
       </div>
       <div className="hairline mt-4" />
@@ -150,7 +165,7 @@ export default function FieldPage() {
         {error && <p style={{ color: 'var(--maroon-text)' }}>{error}</p>}
         {!loading && !error && posts.length === 0 && (
           <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>
-            Nothing posted yet. Check back soon.
+            {copy.empty}
           </p>
         )}
         {posts.length > 0 && (
@@ -214,6 +229,25 @@ export default function FieldPage() {
   )
 }
 
+// The page's two tabs. Each is its own address (/in-the-field and
+// /day-in-the-life) so either can be linked to and found in search.
+function SectionTabs() {
+  return (
+    <nav aria-label="In the Field sections" className="flex gap-6">
+      {Object.entries(SECTION_PATHS).map(([key, to]) => (
+        <NavLink
+          key={key}
+          to={to}
+          className={({ isActive }) => `nav-link text-xs uppercase no-underline whitespace-nowrap ${isActive ? 'nav-link-active' : ''}`}
+          style={{ letterSpacing: '0.16em', paddingBottom: '4px' }}
+        >
+          {FIELD_SECTIONS[key].title}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
 // Swipeable photos/videos for one post, with dots when there's more than one.
 function MediaCarousel({ post, onOpenImage, aspect }) {
   const media = post.media || []
@@ -251,7 +285,9 @@ function MediaCarousel({ post, onOpenImage, aspect }) {
           >
             {m.type === 'video' ? (
               <video
-                src={m.url}
+                // #t=0.001 makes iOS Safari render the first frame as a thumbnail
+                // (otherwise it shows black until play with preload="metadata").
+                src={m.url.includes('#') ? m.url : `${m.url}#t=0.001`}
                 controls
                 playsInline
                 preload="metadata"

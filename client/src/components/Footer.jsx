@@ -1,22 +1,35 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 
-const FOOTER_LINKS = [
-  { label: 'Projects', to: '/projects' },
-  { label: 'About', to: '/about' },
-  { label: 'Contact', to: '/contact' },
-  { label: 'Privacy', to: '/privacy' },
-]
+// Pages where, on laptop/desktop, the footer sits over the page's photo with
+// no charcoal band or top line (.footer-over-photo in index.css).
+const OVER_PHOTO_PATHS = ['/about']
+
+const detail = {
+  color: 'var(--off-white)',
+  opacity: 0.75,
+  fontSize: '0.8rem',
+  letterSpacing: '0.05em',
+  textDecoration: 'none',
+  fontStyle: 'normal',
+  whiteSpace: 'nowrap',
+}
 
 export default function Footer() {
+  const { pathname } = useLocation()
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  const overPhoto = OVER_PHOTO_PATHS.includes(path)
   return (
     <footer
-      className="py-8 px-6"
+      className={`py-8 px-6${overPhoto ? ' footer-over-photo' : ''}`}
       style={{
         borderTop: '1px solid rgba(236, 228, 215, 0.08)',
         backgroundColor: 'var(--charcoal)',
       }}
     >
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6 md:gap-8">
+      {/* One row on laptop/desktop, spread edge to edge: name, phone, address,
+          copyright. Stacked on phones and tablets. lg:pr-20 leaves room for
+          the round chat button fixed in the bottom-right corner. */}
+      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-8 lg:pr-20">
         {/* brand + hidden admin gear (visible on group hover) */}
         <div className="group flex items-center gap-4">
           <NavLink to="/" style={{ textDecoration: 'none' }}>
@@ -28,7 +41,7 @@ export default function Footer() {
                 letterSpacing: '0.18em',
               }}
             >
-              Cavalier Flooring Systems
+              © {new Date().getFullYear()} Cavalier Flooring Systems
             </span>
           </NavLink>
           <NavLink
@@ -55,52 +68,28 @@ export default function Footer() {
           </NavLink>
         </div>
 
-        {/* nav */}
-        <nav aria-label="Footer">
-          <ul className="flex flex-wrap gap-x-8 gap-y-4">
-            {FOOTER_LINKS.map((link) => (
-              <li key={link.to}>
-                <NavLink
-                  to={link.to}
-                  className={({ isActive }) =>
-                    `nav-link text-xs uppercase tracking-[0.18em] no-underline ${
-                      isActive ? 'nav-link-active' : ''
-                    }`
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
 
-        {/* phone + copyright */}
-        <div className="flex flex-col md:items-end gap-2">
-          <a
-            href="tel:+18042547700"
-            style={{
-              color: 'var(--off-white)',
-              opacity: 0.75,
-              fontSize: '0.8rem',
-              letterSpacing: '0.05em',
-              textDecoration: 'none',
-            }}
-          >
+        {/* Keep the phone and address exactly as on the Google Business
+            Profile (src/seo.js has the same details). */}
+        {/* Phone and address read as one line, separated by a dot; on
+            phones they wrap onto two lines (the dot is hidden there). */}
+        <address className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3" style={{ ...detail, opacity: 1 }}>
+          <a href="tel:+18042547700" style={detail}>
             (804) 254-7700
           </a>
-          <p
-            style={{
-              color: 'var(--off-white)',
-              opacity: 0.55,
-              fontSize: '0.75rem',
-              letterSpacing: '0.05em',
-              margin: 0,
-            }}
-          >
-            © {new Date().getFullYear()} Cavalier Flooring Systems
-          </p>
-        </div>
+          <span aria-hidden="true" className="hidden sm:inline" style={{ ...detail, opacity: 0.4 }}>
+            ·
+          </span>
+          <span style={detail}>2020 Tomlynn Street, Richmond, VA 23230</span>
+        </address>
+        {/* Privacy stays linked from every page because the site collects
+            contact details. (The copyright is with the company name, left.) */}
+        <NavLink
+          to="/privacy"
+          style={{ ...detail, opacity: 0.6, fontSize: '0.75rem', borderBottom: '1px solid rgba(236,228,215,0.3)' }}
+        >
+          Privacy Policy
+        </NavLink>
       </div>
     </footer>
   )

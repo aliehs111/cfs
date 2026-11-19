@@ -251,7 +251,9 @@ Add a **Share** button to each post on the staff page (`/in-the-field/post`, in 
 
 ## 3. SEO and moving the client's domain off Hibu
 
-**Status:** Not started. Requested Nov 2026. Do this **at launch**, once the site is otherwise finished.
+**Status:** Part B code done Nov 19 2026 (items 1–6; see below). Parts A, C, D waiting on the domain name, DNS/Hibu discovery and the old Hibu URL list. Domain is registered at **GoDaddy**.
+
+**Goal (Nov 19 2026):** Cavalier is well known in Virginia's construction community and set up for commercial work. SEO should attract general contractors, architects, owners and property managers, and quietly not attract homeowners or small one-off jobs: commercial wording (sectors, F&I, subcontractor), no homeowner phrasing ("home", "near me", "free estimates"), Google Business Profile category **Flooring contractor**, not "Flooring store". Never say "no residential" (multi-family is commercial; nobody is turned away). Ask whether Hibu runs paid ads: those often bring in homeowner leads.
 
 ### Context
 
@@ -275,17 +277,28 @@ Find out exactly what Hibu controls. Most of the risk is here.
 
 The site is a React single-page app: pages are built in the browser by JavaScript. Google can render that, but more slowly and less reliably. Other crawlers and link previews (LinkedIn, Facebook, Slack, many AI search tools) mostly can't. So:
 
-1. **Pre-render the public pages to real HTML** at build time: `/`, `/projects`, each `/projects/<slug>`, `/about`, `/contact`, `/discuss`, `/in-the-field`. Options to evaluate: React Router v7's built-in prerendering (framework mode), or a Vite prerender plugin. Project pages need their slugs at build time: fetch them from the API during the build, and redeploy (or trigger a rebuild) when projects change.
-2. **Per-page titles and descriptions.** Each page gets its own `<title>` and meta description; React 19 supports these directly inside components. Example: "Commercial Flooring Contractor in Central Virginia | Cavalier Flooring Systems". Each project page uses its own name, location and flooring type.
-3. **Social preview tags** (Open Graph + Twitter): title, description and image per page, plus a default share image.
-4. **Structured data** (JSON-LD): a `LocalBusiness` / `GeneralContractor` block on the home page with name, address, phone, hours, service area (Charlottesville, Central VA to Fredericksburg, Tidewater: confirm with founder) and logo.
-5. **`sitemap.xml`** listing all public pages and project pages, generated at build. **`robots.txt`**: ✅ done (`client/public/robots.txt` blocks `/admin` and `/in-the-field/post`). Add the `Sitemap:` line once the domain and sitemap exist.
-6. **Canonical URLs.** Pick one version (`https://www.<domain>` *or* `https://<domain>`), redirect the other to it, and set `<link rel="canonical">` on every page.
+1. ✅ **Done Nov 19 2026.** `npm run build` now runs `vite build`, a build-time render (`src/entry-server.jsx`), then `scripts/prerender.mjs`, which saves each public page as `dist/<path>/index.html` (Railway's Caddy already serves `/about/index.html` for `/about`). Project pages are fetched from the API during the build (`VITE_API_URL`); **redeploy the frontend after adding or editing projects** to refresh their pages and the sitemap. Projects added since the last deploy still work (they load in the browser), they just lack pre-built HTML until then. Original note: **Pre-render the public pages to real HTML** at build time: `/`, `/projects`, each `/projects/<slug>`, `/about`, `/contact`, `/discuss`, `/in-the-field`. Options to evaluate: React Router v7's built-in prerendering (framework mode), or a Vite prerender plugin. Project pages need their slugs at build time: fetch them from the API during the build, and redeploy (or trigger a rebuild) when projects change.
+2. ✅ **Done** (`src/seo.js` holds every title/description; `components/Seo.jsx`). **Per-page titles and descriptions.** Each page gets its own `<title>` and meta description; React 19 supports these directly inside components. Example: "Commercial Flooring Contractor in Central Virginia | Cavalier Flooring Systems". Each project page uses its own name, location and flooring type.
+3. ✅ **Done** (default image `client/public/og-image.jpg`, from the home page photo; project pages use their first photo). **Social preview tags** (Open Graph + Twitter): title, description and image per page, plus a default share image.
+4. ✅ **Done, without street address** (`BUSINESS` in `src/seo.js`, rendered on the home page). Add the address once the founder confirms it, or leave it out to be a service-area business. **Structured data** (JSON-LD): a `LocalBusiness` / `GeneralContractor` block on the home page with name, address, phone, hours, service area (Charlottesville, Central VA to Fredericksburg, Tidewater: confirm with founder) and logo.
+5. ✅ **Done**: `sitemap.xml` and the robots.txt `Sitemap:` line are generated at build **once `VITE_SITE_URL` is set**. **`sitemap.xml`** listing all public pages and project pages, generated at build. **`robots.txt`**: ✅ done (`client/public/robots.txt` blocks `/admin` and `/in-the-field/post`). Add the `Sitemap:` line once the domain and sitemap exist.
+6. ✅ **Tags done**: canonical and `og:url` come from `VITE_SITE_URL` (left out until it's set). Recommended canonical: `https://www.<domain>` (GoDaddy DNS can't point the bare domain at Railway; forward it to www). **Canonical URLs.** Pick one version (`https://www.<domain>` *or* `https://<domain>`), redirect the other to it, and set `<link rel="canonical">` on every page.
 7. **A real 404 page**: ✅ done (`NotFoundPage.jsx`, catch-all route). Note: it's served with HTTP status 200 because the static host returns `index.html` for every path. Once pages are prerendered, make unknown URLs return a true 404 status.
 8. **Images:** descriptive `alt` text everywhere (gallery, project pages, In the Field), reasonable file sizes, lazy loading below the fold.
 9. **Page speed:** check Core Web Vitals with Lighthouse or PageSpeed Insights. Fonts, hero images and the JS bundle are the usual suspects.
-10. **Local search terms in the copy**, written for people, not keyword stuffing: "commercial flooring", the flooring types, and the cities served. Mostly the founder's copy plus project descriptions; check that the About and Home pages mention the service area.
-11. **Name, address and phone (NAP) must exactly match** the Google Business Profile and other listings.
+10. **Home page copy: decided Nov 19 2026, keep it uncluttered.** The home page shows only "Cavalier / Flooring Systems / Since 1981" and its `<h1>` is just "Cavalier", so it gives Google very little to match on. The owner doesn't want visible copy added for now and may add very subtle copy later. **Don't use hidden or near-invisible text** (same colour as the background, tiny, off-screen) to carry keywords: Google's spam policies treat that as "hidden text" and can demote the whole site. Options that stay clean: a small but readable line (e.g. "Commercial flooring contractor · Virginia") in the footer or under "Since 1981"; a real `<h1>`/`<h2>` that's visually understated but legible; or let the title, description and structured data (already done) plus the Projects and About pages carry the keywords.
+11. **Local search terms in the copy**, written for people, not keyword stuffing: "commercial flooring", the flooring types, and the cities served. Mostly the founder's copy plus project descriptions; check that the About and Home pages mention the service area.
+12. **Name, address and phone (NAP) must exactly match** the Google Business Profile and other listings.
+
+### Part B2: Expertise page (added Nov 19 2026)
+
+`/expertise` (`client/src/pages/ExpertisePage.jsx`) outlines the services, mainly for search: one `<h2>` per service with an anchor (`#carpet`, `#resilient`, `#tile`, `#wall-panels`, `#subfloor`, `#furnish-install`), plus service area and sectors. Content comes only from `server/knowledge_base.md`; K-12 is deliberately not listed. Linked from the header ("More" dropdown) and the footer.
+- ✅ Title/description in `src/seo.js`, pre-built HTML, included in the sitemap automatically.
+- [ ] Founder review of service names and wording (flooring vocabulary audit; confirm "Retail" and "Corridors and common areas" as sectors; whether to name broadloom).
+- [ ] Part C: map any old Hibu service pages to `/expertise` or the matching `#section`.
+- [ ] Google Business Profile → Services: match the Expertise list and wording.
+- [ ] Optional: project pages link to their flooring type's section (e.g. sheet vinyl → `/expertise#resilient`).
+- [ ] Later, if a service is worth ranking for on its own (e.g. moisture mitigation), give it its own page grown from its section.
 
 ### Part C: Redirects from old Hibu URLs
 
@@ -767,6 +780,7 @@ Add a clear section to `knowledge_base.md`. Starting list for the founder to con
 ### Variables (each needs a Deploy to take effect)
 - [ ] **cfs-server** `FRONTEND_URL` → `https://www.<domain>` (exact: `https://`, no trailing slash; with the list change above, `https://www.<domain>,https://cavalier-flooring-production-889e.up.railway.app` during the switch). It controls which site may call the API **and** the links inside alert emails.
 - [ ] **cavalier-flooring** `VITE_API_URL` → `https://api.<domain>`, then **redeploy the frontend** (it's built into the page).
+- [ ] **cavalier-flooring** `VITE_SITE_URL` → `https://www.<domain>` (the canonical address, no trailing slash). Turns on canonical links, `og:url` and `sitemap.xml` (§3 Part B). Redeploy after setting it, then check `https://www.<domain>/sitemap.xml` loads.
 
 ### Cloudflare Turnstile (§5)
 - [ ] Cloudflare → Turnstile → the Cavalier widget → **add `<domain>` and `www.<domain>` to its hostnames**. Same keys, no code change. **If this is missed, the contact form and `/discuss` reject every visitor on the new domain.**
@@ -827,3 +841,19 @@ Small, page-by-page refinements approved by the developer. Keep them unless deli
   - Role choices are "concept B" hairline rows with an arrow (`.role-option`); hover/focus = stone wash + maroon arrow. Filled stone panels were tried and rejected as too blocky.
   - Background photo `client/assets/discuss_hero.jpg` (web copy of "Sunlit Modern Industrial Interior.png"), medium filter via `--discuss-photo-*`; top band darker so the "HOW CAN WE HELP?" label keeps full `--maroon-text` (with a faint halo). Small text over the photo raised to ~88%. Contrast measured against the photo's brightest pixels behind each line: all ≥ 4.5:1.
   - Option text: "Owner, facility manager, or end user".
+
+---
+
+## 23. A Day in the Life (added Nov 19 2026)
+
+**Status:** Built; needs the database step below before posts can go to it.
+
+A tongue-in-cheek page (`/day-in-the-life`) of photos with deadpan captions showing what crews walk into ("ready for flooring", "can you start on the 14th floor today?"). It reuses In the Field: every post now has a **section** (`field` or `day-in-the-life`), staff choose "Post to" on the posting page, and `FieldPage.jsx` shows one section (wording in `client/src/fieldSections.js`). Comments, editing, alerts and the grid/feed views work the same. It's a tab on the In the Field page (tabs: In the Field | A Day in the Life; each keeps its own address), and the header's In the Field link stays highlighted on both.
+
+**Database step (once):** run the "SECTIONS" block at the end of `schema.sql` in the Supabase SQL Editor. Until then In the Field works as before (the server falls back and logs a warning on each load) and A Day in the Life shows as empty; posting to it fails.
+
+**Tone guardrail (shown on the posting form):** keep posts anonymous: no company names, logos, signage, faces or anything identifying the job or contractor. GCs are customers; the joke is the situation, never a customer.
+
+- [ ] Run the SQL block.
+- [ ] Post a first few so the page isn't empty at launch.
+- [ ] Optional: let the post editor move a post between the two pages (the API already accepts `section` on edit).

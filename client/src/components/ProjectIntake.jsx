@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import ContactModal from './ContactModal'
 import { BOT_CHECK_FAILED, useTurnstile } from '../lib/turnstile'
 
@@ -294,6 +295,23 @@ export default function ProjectIntake() {
                 onClick={() => handleStart('specifier')}
               />
             </div>
+
+            {/* For people who'd rather just send a message. */}
+            <p className="mt-8" style={{ fontSize: '0.8rem' }}>
+              <Link
+                to="/contact"
+                className="transition-opacity duration-300 hover:opacity-100"
+                style={{
+                  color: 'var(--off-white)',
+                  opacity: 0.7,
+                  textDecoration: 'none',
+                  borderBottom: '1px solid rgba(236,228,215,0.3)',
+                  paddingBottom: '2px',
+                }}
+              >
+                Skip this and go right to the contact form →
+              </Link>
+            </p>
           </div>
         )}
 
@@ -316,11 +334,15 @@ export default function ProjectIntake() {
               aria-label="Describe your project"
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
+              // Short guiding questions, not a sample project: a full example
+              // looked like text already typed in. Faint + italic via
+              // .intake-input::placeholder in index.css.
               placeholder={
                 role === 'specifier'
-                  ? "Bidding a 25,000 sq ft retrofit at a community college library in Norfolk. Architect has spec'd LVT throughout open stacks and carpet tile in the study rooms. Award expected late June, mobilization mid-August. Building is occupied — work has to happen in two phases around the academic calendar."
-                  : "We're renovating a 12,000 sq ft outpatient clinic in Charlottesville — wing of exam rooms and a waiting area. Existing sheet vinyl is curling at the seams. Need something durable, easy to clean, and that doesn't read like a hospital. Hoping to start construction in August."
+                  ? 'What’s the project and scope? Where is it in design or bidding, and what’s the schedule?'
+                  : 'What kind of space is it? New construction or renovation? Roughly how big, and when are you hoping to start?'
               }
+              className="intake-input"
               rows={7}
               style={textareaStyle}
               autoFocus
@@ -406,6 +428,7 @@ export default function ProjectIntake() {
               value={followupInput}
               onChange={(e) => setFollowupInput(e.target.value)}
               placeholder="Type your answer..."
+              className="intake-input"
               aria-label="Your answer"
               rows={3}
               style={textareaStyle}

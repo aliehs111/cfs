@@ -251,3 +251,15 @@ alter table field_comments enable row level security;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('project-images', 'project-images', true, 10485760, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do nothing;
+
+-- =========================================================
+-- SECTIONS: In the Field vs. A Day in the Life (added Nov 19 2026).
+-- Run on its own in the Supabase SQL Editor. Each post belongs to one page;
+-- existing posts become In the Field. Safe to run more than once.
+-- =========================================================
+alter table field_posts add column if not exists section text not null default 'field';
+do $$ begin
+  alter table field_posts add constraint field_posts_section_check
+    check (section in ('field', 'day-in-the-life'));
+exception when duplicate_object then null; end $$;
+create index if not exists field_posts_section_created_idx on field_posts (section, created_at desc);

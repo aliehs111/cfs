@@ -2,13 +2,20 @@ import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ContactModal from '../components/ContactModal'
 import { isAdmin, useCurrentUser } from '../lib/auth'
+import Seo from '../components/Seo'
+import { readPreload } from '../preload'
+import { metaForProject, SITE_NAME } from '../seo'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 export default function ProjectDetailPage() {
   const { slug } = useParams()
   // Which slug the loaded result belongs to; anything else means "loading".
-  const [result, setResult] = useState({ slug: null, project: null, error: null })
+  // Starts from data saved into the page at build time, when there is any.
+  const [result, setResult] = useState(() => {
+    const project = readPreload(`/projects/${slug}`)?.project
+    return project ? { slug, project, error: null } : { slug: null, project: null, error: null }
+  })
   const [contactOpen, setContactOpen] = useState(false)
   const { user } = useCurrentUser()
   const loading = result.slug !== slug
@@ -27,7 +34,14 @@ export default function ProjectDetailPage() {
         if (!cancelled) setResult({ slug, project: data.project, error: null })
       })
       .catch((reason) => {
-        if (!cancelled) setResult({ slug, project: null, error: reason === 'not_found' ? 'not_found' : 'failed' })
+        if (cancelled) return
+        if (reason === 'not_found') {
+          setResult({ slug, project: null, error: 'not_found' })
+        } else {
+          // Network/server hiccup: keep the project saved into the page at
+          // build time if we have it, rather than replacing it with an error.
+          setResult((prev) => (prev.slug === slug && prev.project ? prev : { slug, project: null, error: 'failed' }))
+        }
       })
     return () => {
       cancelled = true
@@ -37,6 +51,7 @@ export default function ProjectDetailPage() {
   if (loading) {
     return (
       <section className="w-full max-w-7xl mx-auto px-6 py-24">
+        <Seo title={`Project | ${SITE_NAME}`} description={`Commercial flooring project by ${SITE_NAME}.`} path={`/projects/${slug}`} />
         <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading project…</p>
       </section>
     )
@@ -45,6 +60,7 @@ export default function ProjectDetailPage() {
   if (error === 'not_found') {
     return (
       <section className="w-full max-w-7xl mx-auto px-6 py-24">
+        <Seo title={`Project not found | ${SITE_NAME}`} description={`Commercial flooring projects by ${SITE_NAME}.`} noindex />
         <h1
           className="font-display"
           style={{
@@ -87,6 +103,7 @@ export default function ProjectDetailPage() {
   if (error) {
     return (
       <section className="w-full max-w-7xl mx-auto px-6 py-24">
+        <Seo title={`Project | ${SITE_NAME}`} description={`Commercial flooring project by ${SITE_NAME}.`} path={`/projects/${slug}`} />
         <p style={{ color: 'var(--maroon-text)' }}>Failed to load project.</p>
       </section>
     )
@@ -97,6 +114,7 @@ export default function ProjectDetailPage() {
 
   return (
     <section className="w-full max-w-7xl mx-auto px-6 py-24">
+      <Seo {...metaForProject(project)} />
       <Link
         to="/projects"
         className="nav-link"

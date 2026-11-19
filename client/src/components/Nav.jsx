@@ -1,17 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
-const NAV_LINKS = [
-  { to: '/', label: 'Home', exact: true },
-  { to: '/projects', label: 'Projects' },
-  { to: '/in-the-field', label: 'In the Field' },
-  { to: '/discuss', label: 'How can we help?' },
+// Top menu (Nov 19 2026). "Home" is the logo. Two dropdowns plus About.
+// RULE: every public page must be reachable from here (directly or in a
+// dropdown). The one exception is A Day in the Life, a tab on In the Field.
+// Check this list against the routes in App.jsx whenever pages change.
+const MENU = [
+  {
+    label: 'Projects',
+    items: [
+      { to: '/projects', label: 'Portfolio' },
+      { to: '/expertise', label: 'Expertise' },
+      // Also highlighted on its A Day in the Life tab.
+      { to: '/in-the-field', label: 'In the Field', alsoActive: ['/day-in-the-life'] },
+    ],
+  },
   { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
+  {
+    label: 'How can we help?',
+    items: [
+      { to: '/discuss', label: 'About your project' },
+      { to: '/contact', label: 'Contact form' },
+    ],
+  },
 ]
+const isActivePath = (pathname, item) =>
+  [item.to, ...(item.alsoActive || [])].some((p) => pathname === p || pathname.startsWith(`${p}/`))
+const isGroupActive = (pathname, group) => group.items.some((item) => isActivePath(pathname, item))
 
-// Six links need ~800px in one row, so the menu button is used below `lg`
-// (1024px), which also covers tablets in portrait.
+// The menu button is used below `lg` (1024px), which also covers tablets in
+// portrait.
 export default function Nav() {
   const { pathname } = useLocation()
   // The menu belongs to the page it was opened on, so any navigation
@@ -72,21 +90,25 @@ export default function Nav() {
           </span>
         </NavLink>
 
-        <nav className="hidden lg:flex gap-8" aria-label="Main">
-          {NAV_LINKS.map(({ to, label, exact }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={exact}
-              className={({ isActive }) =>
-                `nav-link text-xs uppercase tracking-[0.18em] no-underline ${
-                  isActive ? 'nav-link-active' : ''
-                }`
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
+        {/* items-baseline: the dropdown labels are buttons, which otherwise sit a
+            few px off the plain links. */}
+        <nav className="hidden lg:flex items-baseline gap-8" aria-label="Main">
+          {MENU.map((item, i) =>
+            item.items ? (
+              // The last dropdown opens to the left so it can't run off the screen.
+              <DropdownMenu key={item.label} group={item} pathname={pathname} alignRight={i === MENU.length - 1} />
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={`nav-link text-xs uppercase tracking-[0.18em] no-underline ${
+                  isActivePath(pathname, item) ? 'nav-link-active' : ''
+                }`}
+              >
+                {item.label}
+              </NavLink>
+            ),
+          )}
         </nav>
 
         <MenuButton ref={menuButton} open={open} onToggle={() => setOpenOn(open ? null : pathname)} />
@@ -94,6 +116,102 @@ export default function Nav() {
 
       {open && <MobileMenu onClose={close} returnFocusTo={menuButton} />}
     </header>
+  )
+}
+
+// Desktop dropdown: the label alone (no arrow) opens it. Opens on click (or Enter/Space); closes on Escape, on a
+// click outside it, and whenever the page changes. Underlined like an active
+// link when the current page is one of its items.
+function DropdownMenu({ group, pathname, alignRight = false }) {
+  const [openOn, setOpenOn] = useState(null)
+  const open = openOn === pathname
+  const wrap = useRef(null)
+  const button = useRef(null)
+  const firstItem = useRef(null)
+  // Move focus into the menu only when it was opened from the keyboard; a
+  // mouse click shouldn't leave a focus outline on the first item.
+  const fromKeyboard = useRef(false)
+  const menuId = `menu-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}`
+  const active = isGroupActive(pathname, group)
+
+  useEffect(() => {
+    if (!open) return
+    if (fromKeyboard.current) firstItem.current?.focus()
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setOpenOn(null)
+        button.current?.focus()
+      }
+    }
+    const onPointer = (e) => {
+      if (!wrap.current?.contains(e.target)) setOpenOn(null)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onPointer)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPointer)
+    }
+  }, [open])
+
+  return (
+    <div ref={wrap} className="relative">
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(e) => {
+          fromKeyboard.current = e.detail === 0 // Enter/Space clicks report detail 0
+          setOpenOn(open ? null : pathname)
+        }}
+        className={`nav-link text-xs uppercase tracking-[0.18em] ${active ? 'nav-link-active' : ''}`}
+        style={{ background: 'none', borderWidth: '0 0 1px 0', borderStyle: 'solid', cursor: 'pointer', padding: '0 0 2px', fontFamily: 'inherit' }}
+      >
+        {group.label}
+      </button>
+      {open && (
+        <ul
+          id={menuId}
+          className={`absolute ${alignRight ? 'right-0' : 'left-0'}`}
+          style={{
+            top: 'calc(100% + 22px)', // drops just below the header bar
+            minWidth: 220,
+            listStyle: 'none',
+            margin: 0,
+            padding: '8px 0',
+            backgroundColor: 'var(--charcoal)',
+            border: '1px solid rgba(236, 228, 215, 0.1)',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+          }}
+        >
+          {group.items.map((item, i) => {
+            const itemActive = isActivePath(pathname, item)
+            return (
+              <li key={item.to}>
+                <NavLink
+                  ref={i === 0 ? firstItem : undefined}
+                  to={item.to}
+                  onClick={() => setOpenOn(null)}
+                  className="dropdown-link block text-xs uppercase no-underline whitespace-nowrap"
+                  style={{ letterSpacing: '0.18em', padding: '12px 22px' }}
+                >
+                  <span style={{ color: 'var(--off-white)', opacity: itemActive ? 1 : 0.75 }}>
+                    {item.label}
+                    {itemActive && (
+                      <span
+                        aria-hidden="true"
+                        style={{ display: 'inline-block', width: 16, height: 1, marginLeft: 10, verticalAlign: 'middle', backgroundColor: 'var(--maroon)' }}
+                      />
+                    )}
+                  </span>
+                </NavLink>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -139,6 +257,7 @@ function MenuButton({ ref, open, onToggle }) {
 }
 
 function MobileMenu({ onClose, returnFocusTo }) {
+  const { pathname } = useLocation()
   const firstLink = useRef(null)
 
   useEffect(() => {
@@ -175,34 +294,62 @@ function MobileMenu({ onClose, returnFocusTo }) {
           overflowY: 'auto',
         }}
       >
+        {/* Phones/tablets: every page listed; a dropdown's items sit under a
+            small heading with its name. */}
         <ul className="max-w-7xl mx-auto px-6 pb-6" style={{ listStyle: 'none', margin: 0 }}>
-          {NAV_LINKS.map(({ to, label, exact }, i) => (
-            <li key={to} style={{ borderTop: '1px solid rgba(236, 228, 215, 0.08)' }}>
-              <NavLink
-                ref={i === 0 ? firstLink : undefined}
-                to={to}
-                end={exact}
-                onClick={onClose}
-                className="flex items-center justify-between text-sm uppercase no-underline"
-                style={{
-                  color: 'var(--off-white)',
-                  letterSpacing: '0.18em',
-                  padding: '18px 0', // ~56px rows: easy to tap with a thumb or a glove
-                }}
-              >
-                {({ isActive }) => (
-                  <>
-                    <span style={{ opacity: isActive ? 1 : 0.8 }}>{label}</span>
-                    {isActive && (
-                      <span aria-hidden="true" style={{ width: 24, height: 1, backgroundColor: 'var(--maroon)' }} />
-                    )}
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
+          {MENU.map((entry, gi) =>
+            entry.items ? (
+              <li key={entry.label} style={{ borderTop: '1px solid rgba(236, 228, 215, 0.08)', paddingTop: '14px' }}>
+                <span
+                  className="uppercase"
+                  style={{ display: 'block', fontSize: '0.65rem', letterSpacing: '0.18em', color: 'var(--off-white)', opacity: 0.45 }}
+                >
+                  {entry.label}
+                </span>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  {entry.items.map((item, i) => (
+                    <MobileLink
+                      key={item.to}
+                      item={item}
+                      pathname={pathname}
+                      onClose={onClose}
+                      linkRef={gi === 0 && i === 0 ? firstLink : undefined}
+                    />
+                  ))}
+                </ul>
+              </li>
+            ) : (
+              <li key={entry.to} style={{ borderTop: '1px solid rgba(236, 228, 215, 0.08)' }}>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  <MobileLink item={entry} pathname={pathname} onClose={onClose} linkRef={gi === 0 ? firstLink : undefined} />
+                </ul>
+              </li>
+            ),
+          )}
         </ul>
       </nav>
     </div>
+  )
+}
+
+function MobileLink({ item, pathname, onClose, linkRef }) {
+  const isActive = isActivePath(pathname, item)
+  return (
+    <li>
+      <NavLink
+        ref={linkRef}
+        to={item.to}
+        onClick={onClose}
+        className="flex items-center justify-between text-sm uppercase no-underline"
+        style={{
+          color: 'var(--off-white)',
+          letterSpacing: '0.18em',
+          padding: '14px 0', // ~48px rows: easy to tap with a thumb or a glove
+        }}
+      >
+        <span style={{ opacity: isActive ? 1 : 0.8 }}>{item.label}</span>
+        {isActive && <span aria-hidden="true" style={{ width: 24, height: 1, backgroundColor: 'var(--maroon)' }} />}
+      </NavLink>
+    </li>
   )
 }

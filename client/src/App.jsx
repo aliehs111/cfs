@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import Seo from './components/Seo'
+import { metaForPath } from './seo'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 import Nav from './components/Nav'
@@ -11,6 +13,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import DiscussPage from './pages/DiscussPage'
 import AboutPage from './pages/AboutPage'
+import ExpertisePage from './pages/ExpertisePage'
 import ContactPage from './pages/ContactPage'
 import AdminPage from './pages/AdminPage'
 import LoginPage from './pages/LoginPage'
@@ -65,15 +68,27 @@ function PageTracker() {
   return null
 }
 
+// Title, description and preview tags for the current page. Project pages
+// set their own (ProjectDetailPage), from the project's details.
+function RouteSeo() {
+  const { pathname } = useLocation()
+  if (/^\/projects\/[^/]+/.test(pathname)) return null
+  return <Seo {...metaForPath(pathname)} />
+}
+
 function ChatGate() {
   const location = useLocation()
   if (isStaffPath(location.pathname)) return null
   return <ChatWidget />
 }
 
-export default function App() {
+// Everything inside the router. The browser wraps it in BrowserRouter (below);
+// the build step wraps it in StaticRouter (entry-server.jsx) to save each
+// public page as ready-made HTML.
+export function AppShell() {
   return (
-    <BrowserRouter>
+    <>
+      <RouteSeo />
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -88,7 +103,10 @@ export default function App() {
           <Route path="/projects/:slug" element={<ProjectDetailPage />} />
           <Route path="/discuss" element={<DiscussPage />} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/in-the-field" element={<FieldPage />} />
+          <Route path="/expertise" element={<ExpertisePage />} />
+          {/* key: a fresh page (and post list) per section */}
+          <Route path="/in-the-field" element={<FieldPage key="field" section="field" />} />
+          <Route path="/day-in-the-life" element={<FieldPage key="day-in-the-life" section="day-in-the-life" />} />
           <Route path="/in-the-field/post" element={<FieldPostPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
@@ -100,6 +118,14 @@ export default function App() {
       </main>
       <Footer />
       <ChatGate />
+    </>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   )
 }

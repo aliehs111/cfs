@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
-// Top menu (Nov 19 2026). "Home" is the logo. Two dropdowns plus About.
+// Top menu (Nov 19 2026). "Home" is the logo. Two dropdowns plus In the Field
+// and About. (Nov 20 2026: In the Field moved out of the Projects dropdown to
+// its own item, so it's one click from every page.)
 // RULE: every public page must be reachable from here (directly or in a
 // dropdown). The one exception is A Day in the Life, a tab on In the Field.
 // Check this list against the routes in App.jsx whenever pages change.
@@ -11,10 +13,10 @@ const MENU = [
     items: [
       { to: '/projects', label: 'Portfolio' },
       { to: '/expertise', label: 'Expertise' },
-      // Also highlighted on its A Day in the Life tab.
-      { to: '/in-the-field', label: 'In the Field', alsoActive: ['/day-in-the-life'] },
     ],
   },
+  // Also highlighted on its A Day in the Life tab.
+  { to: '/in-the-field', label: 'In the Field', alsoActive: ['/day-in-the-life'] },
   { to: '/about', label: 'About' },
   {
     label: 'How can we help?',

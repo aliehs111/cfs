@@ -15,14 +15,18 @@ def client_ip(request: Request) -> str:
     # "X-Real-IP: 1.2.3.4" still arrived with the visitor's real IP, so
     # Railway's edge overwrites X-Real-IP and it can't be faked. (The last
     # X-Forwarded-For entry turned out to be a Railway edge address, not the
-    # visitor, so the fallback below would be wrong on Railway; it is only
-    # reached if X-Real-IP is ever missing, e.g. a different host.)
+    # visitor: the header arrived as "<visitor>, <Railway edge>". So the
+    # fallback below takes the entry just before the last one. Entries before
+    # that can be faked by the visitor. Only reached if X-Real-IP is ever
+    # missing.)
     real_ip = request.headers.get("x-real-ip")
     if real_ip:
         return real_ip.strip()
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[-1].strip()
+        hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+        if hops:
+            return hops[-2] if len(hops) >= 2 else hops[0]
     return get_remote_address(request)
 
 

@@ -11,7 +11,7 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - ~~§5 Spam protection on forms~~ ✅ done (Turnstile keys live on Railway)
 - ~~§11 `/discuss` prompt aligned with the chatbot knowledge base~~ ✅ done
 - §18 Thorough review of the AI context, so the bots never say something Cavalier wouldn't
-- §6 Production hosting setup *(US region ✅ moved Nov 7; still: confirm `ENV=production`, Supabase plan, backups)*
+- §6 Production hosting setup *(US region ✅ moved Nov 7; Supabase Pro ✅; still: confirm `ENV=production`, backups)*
 - §7 Account ownership, billing and costs *(a decision, not code)*
 - ~~§8 Mobile navigation menu~~ ✅ done
 - ~~§10 Admin → Projects tab with photo upload~~ ✅ done
@@ -30,7 +30,67 @@ Features agreed on but not yet built. Each section is meant to be enough context
 - §15 Update the Anthropic SDK and models
 - ~~§19 Fix existing lint errors~~ ✅ done
 
+**Latest session:** see "Session log — Nov 20 2026" below.
+
 **Options considered, not scheduled:** §21 run as one Railway service; weekly digest scheduling (§4).
+
+---
+
+## Session log — Nov 20 2026
+
+**Fixed**
+- Server crashed on Windows: `tzdata` added to `server/requirements.txt` (reinstall on each machine; see CLAUDE.md).
+- Field video limit raised to 200 MB (Supabase global limit, `field-media` bucket, and the app).
+- Windows-only date formats (`%-d`, `%-I`) in alert emails and the digest replaced. These made local saves look like failures and caused duplicate posts.
+- Alerts can no longer turn a saved post or contact message into an error.
+- `/api/chat` limits: role user/assistant, 2000 characters per visitor message, 70 messages, 60,000 characters in total.
+- In the Field file safety: upload file names now start with the uploader's id (`YYYY/MM/{id}_{uuid}.ext`), and a poster can only attach their own files, so nobody can delete another poster's media.
+- Featured videos:
+  - A featured post is unfeatured automatically if its video is edited out.
+  - Unfeature shows on any featured post.
+  - Featuring an 11th video in a section is refused with a clear message.
+- In the Field queries fall back to the older schema only on a missing column, not on any error.
+- Other fixes:
+  - A bad `?before=` value now returns 400 instead of 500.
+  - `/api/track/visit` is rate-limited.
+  - A finished `/discuss` conversation is always emailed.
+  - The delete alert names the right page.
+  - `my_alerts` saves retry when two happen at once.
+  - The flooring field limit is now 1000 characters.
+  - `$` in project text no longer garbles prerendered pages.
+  - Em dashes no longer garble in streamed chat replies.
+- **Rate limits verified on Railway:** a request sent with a made-up `X-Real-IP` still arrived with the visitor's real IP, so the limits can't be dodged. The last `X-Forwarded-For` entry is a Railway edge address, so the limiter's backup (used only if `X-Real-IP` is missing) now takes the entry before it (see `server/limiter.py`).
+
+**Built**
+- **Featured videos:** admins only, video posts only, up to 10 per page, shown in layout A on both In the Field tabs and removed from the grid. Needs the `featured_at` column (schema.sql, already run).
+- **In the Field search:** searches caption, location and author.
+- **In the Field cards:** captions are shortened with More/Less in the grid, the featured spot and the Feed view.
+- **In the Field viewer:**
+  - Photos and videos open in a large viewer that covers the chat button.
+  - Arrows, keys and swipe step through a post's photos and videos.
+  - "Previous post / Next post" move to the neighbouring posts.
+  - The cards have hover arrows.
+- **Projects:**
+  - Project cards: multi-photo slideshow (dots, hover arrows, swipe).
+  - Project pages: photos open full size, with "Previous project / Next project". Closing the viewer on another project goes to that project's page.
+  - Admin → Projects: multi-select flooring types, "+ Add photos" button, 20-photo limit, Edit label on rows. Cancel, switching tabs, the browser Back/Forward buttons and refreshing all warn about unsaved edits, and saving shows "✓ Saved".
+- **Admin:** the open tab is kept in the URL, tab colours fixed, Submission and Intake rows work with the keyboard, and the user form has labels.
+- **Public site:**
+  - Expertise page: the owner's copy.
+  - Menu:
+    - "In the Field" is its own top-menu item, no longer in the Projects dropdown.
+    - "About your project" renamed "Describe your project".
+    - The phone menu has a tap-to-call link.
+  - The home page is unchanged.
+  - Form underlines are readable (`--field-line`) and small buttons have 44px tap areas.
+  - `/discuss` keeps typed text on error and doesn't send the same answer twice on retry.
+  - The chat closes with Escape.
+  - "Sign in to comment" is hidden from signed-out visitors.
+- **Posting page:** stone background; "Posted." shows by the button; you're warned before leaving during an upload.
+
+**Open items**
+- Nothing above has been fully tested in a browser. Test the viewers, Feature/Unfeature, the admin unsaved-changes prompts, and the phone menu.
+- Only loaded posts count for "Next post". Load more extends the list.
 
 ---
 

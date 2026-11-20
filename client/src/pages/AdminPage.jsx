@@ -57,7 +57,14 @@ export default function AdminPage() {
   // The open tab lives in the URL (/admin?tab=projects), so a refresh or the
   // Back button keeps it. Links like /admin?tab=projects&edit=<id> also open a
   // project directly.
-  const tab = Object.values(TABS).includes(params.get('tab')) ? params.get('tab') : TABS.SUBMISSIONS
+  //
+  // The page shows `shown` (a copy of the URL's query) rather than the URL
+  // itself, so when the URL changes underneath an editor with unsaved changes
+  // (the browser's Back/Forward buttons), the editor stays on screen until the
+  // admin answers "Discard your changes?". Saying no puts the URL back.
+  const [shown, setShown] = useState(() => params.toString())
+  const shownParams = new URLSearchParams(shown)
+  const tab = Object.values(TABS).includes(shownParams.get('tab')) ? shownParams.get('tab') : TABS.SUBMISSIONS
   // True while the project editor has unsaved changes (it reports them), so
   // switching tabs asks first instead of silently throwing the edits away.
   const projectDirty = useRef(false)
@@ -70,7 +77,17 @@ export default function AdminPage() {
   const setProjectDirty = useCallback((dirty) => {
     projectDirty.current = dirty
   }, [])
-  const editProjectId = tab === TABS.PROJECTS ? params.get('edit') : null
+  const urlQuery = params.toString()
+  useEffect(() => {
+    if (urlQuery === shown) return
+    if (projectDirty.current && !window.confirm('Discard your changes?')) {
+      setParams(new URLSearchParams(shown)) // stay on the editor
+      return
+    }
+    projectDirty.current = false
+    setShown(urlQuery) // after the confirm above, so it can't be worked out during render
+  }, [urlQuery, shown, setParams])
+  const editProjectId = tab === TABS.PROJECTS ? shownParams.get('edit') : null
   const [contacts, setContacts] = useState([])
   const [intakes, setIntakes] = useState([])
   const [error, setError] = useState('')

@@ -566,12 +566,6 @@ main {
 /* ---------------------------------------------------------------- Public-site polish (Nov 20 2026) */
 
 /* Home page "In the Field →" link: quiet, brightens on hover. */
-.home-cta {
-  transition: opacity 0.25s ease;
-}
-.home-cta:hover {
-  opacity: 0.7;
-}
 
 /* Small text buttons (Send Message →, Continue →, chat ×): a 44px tap area
    around the button without changing how it looks. */

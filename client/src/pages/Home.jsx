@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import adhesive from '../../assets/adhesive_trowel.jpg'
 import { BUSINESS } from '../seo'
 
@@ -112,20 +111,6 @@ export default function Home() {
         >
           Since 1981
         </p>
-        <Link
-          to="/in-the-field"
-          className="home-cta uppercase inline-block mt-8"
-          style={{
-            fontSize: '0.75rem',
-            letterSpacing: '0.16em',
-            color: 'var(--maroon-text)',
-            marginLeft: 'calc(0.13 * clamp(4rem, 18vw, 13rem))',
-            padding: '12px 0',
-            textDecoration: 'none',
-          }}
-        >
-          In the Field →
-        </Link>
       </div>
     </section>
     </>

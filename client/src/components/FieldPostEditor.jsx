@@ -45,10 +45,25 @@ const label = {
   marginTop: '1rem',
 }
 
-export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthorized }) {
+// onToggleFeature: passed only for admins on video posts. Called with true to
+// feature the post, false to unfeature it; throws with a message on failure.
+export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthorized, featured = false, onToggleFeature }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [featuring, setFeaturing] = useState(false)
   const [error, setError] = useState('')
+
+  const toggleFeature = async () => {
+    setFeaturing(true)
+    setError('')
+    try {
+      await onToggleFeature(!featured)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setFeaturing(false)
+    }
+  }
 
   const remove = async () => {
     if (!window.confirm('Delete this post from the website? Its photos, videos and comments are removed too.')) return
@@ -85,6 +100,11 @@ export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthoriz
         <button type="button" onClick={() => setEditing(true)} disabled={busy} style={textButton}>
           Edit
         </button>
+        {onToggleFeature && (
+          <button type="button" onClick={toggleFeature} disabled={busy || featuring} style={textButton}>
+            {featuring ? 'Saving…' : featured ? 'Unfeature' : 'Feature'}
+          </button>
+        )}
         <button
           type="button"
           onClick={remove}

@@ -264,3 +264,14 @@ do $$ begin
     check (section in ('field', 'day-in-the-life'));
 exception when duplicate_object then null; end $$;
 create index if not exists field_posts_section_created_idx on field_posts (section, created_at desc);
+
+-- =========================================================
+-- FEATURED VIDEOS (added Nov 20 2026).
+-- Run on its own in the Supabase SQL Editor. Admins can feature a video post;
+-- it then shows in the large spot at the top of its page instead of in the
+-- grid. Empty = not featured; the most recently featured shows first.
+-- Safe to run more than once.
+-- =========================================================
+alter table field_posts add column if not exists featured_at timestamptz;
+create index if not exists field_posts_featured_idx
+  on field_posts (section, featured_at desc) where featured_at is not null;

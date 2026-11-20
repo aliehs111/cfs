@@ -1,6 +1,8 @@
 """In the Field — staff-posted photos and videos from job sites, with comments.
 
-Public:   GET  /api/field/posts                 (posts + their comments)
+Public:   GET  /api/field/posts                 (posts + their comments; ?q= keyword search)
+          GET  /api/field/featured              (featured video posts for a section)
+Admins:   POST /api/field/posts/{id}/feature    -> feature / unfeature a video post
 Posters:  POST /api/field/upload-url            -> signed URL; the browser uploads the file
                                                    straight to Supabase Storage (keeps large
                                                    videos off this server)
@@ -20,13 +22,14 @@ In the Field keeps working and A Day in the Life is simply empty.
 """
 
 import os
+import re
 import traceback
 import uuid
 from datetime import datetime, timezone
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 import auth
@@ -63,6 +66,7 @@ EXTENSIONS = {
 
 require_poster = auth.require_roles(*auth.POSTER_ROLES)
 require_account = auth.require_roles()  # any role, password already changed
+require_admin = auth.require_roles(*auth.ADMIN_ROLES)
 
 
 def _now() -> str:
@@ -458,40 +462,46 @@ async def delete_comment(comment_id: str, user: dict = Depends(require_account))
 
 # ---------------------------------------------------------------- public feed
 
-def _list_query(before: str | None, section: str | None):
-    """One page of public posts, newest first. section=None means no section
-    filter (used only before the `section` column exists)."""
-    columns = "id, caption, location, author, user_id, media, created_at"
-    query = get_supabase().table(TABLE).select(columns + (", section" if section else ""))
-    query = query.eq("is_public", True)
+BASE_COLUMNS = "id, caption, location, author, user_id, media, created_at"
+SEARCH_FIELDS = ("caption", "location", "author")
+MAX_FEATURED = 10
+
+
+def _search_filter(q: str) -> str | None:
+    """A PostgREST filter where every word in `q` appears in the caption,
+    location or poster name (any mix, case-insensitive). Characters that mean
+    something in PostgREST filters are dropped rather than escaped."""
+    words = re.sub(r"[^\w\s'&-]", " ", q).split()[:8]
+    if not words:
+        return None
+    groups = [
+        "or(" + ",".join(f"{field}.ilike.*{word}*" for field in SEARCH_FIELDS) + ")"
+        for word in words
+    ]
+    return f"and({','.join(groups)})"
+
+
+def _list_query(before: str | None, section: str | None, search: str | None, featured_column: bool):
+    """One page of public posts, newest first.
+    section=None: no section filter (only before the `section` column exists).
+    featured_column=False: before the `featured_at` column exists.
+    Without a search, featured posts are left out (they show at the top of the
+    page instead). A search covers every post, featured ones included."""
+    columns = BASE_COLUMNS + (", section" if section else "") + (", featured_at" if featured_column else "")
+    query = get_supabase().table(TABLE).select(columns).eq("is_public", True)
     if section:
         query = query.eq("section", section)
+    if search:
+        query = query.or_(search)
+    elif featured_column:
+        query = query.is_("featured_at", "null")
     query = query.order("created_at", desc=True).limit(PAGE_SIZE + 1)
     if before:
         query = query.lt("created_at", before)
     return query.execute()
 
 
-@router.get("/field/posts")
-async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTION):
-    """Newest first, PAGE_SIZE at a time, for one page (section). Pass the last
-    post's created_at as `before`."""
-    try:
-        try:
-            res = _list_query(before, section)
-        except Exception:
-            # Most likely the `section` column hasn't been added yet (schema.sql).
-            # Every existing post is In the Field then; A Day in the Life is empty.
-            traceback.print_exc()
-            if section != DEFAULT_SECTION:
-                return {"posts": [], "has_more": False}
-            res = _list_query(before, None)
-    except Exception as exc:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"posts_fetch_failed: {type(exc).__name__}")
-
-    rows = res.data or []
-    posts = rows[:PAGE_SIZE]
+def _attach_comments(posts: list[dict]) -> None:
     try:
         comments = _comments_for([p["id"] for p in posts])
     except Exception:
@@ -500,4 +510,84 @@ async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTI
         comments = {}
     for p in posts:
         p["comments"] = comments.get(p["id"], [])
+
+
+@router.get("/field/posts")
+async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTION,
+                     q: str = Query(default="", max_length=100)):
+    """Newest first, PAGE_SIZE at a time, for one page (section). Pass the last
+    post's created_at as `before`. `q` is a keyword search."""
+    search = _search_filter(q)
+    if q.strip() and not search:
+        return {"posts": [], "has_more": False}
+    # Newest schema first; fall back if a column hasn't been added yet.
+    attempts = [(section, True), (section, False)]
+    if section == DEFAULT_SECTION:
+        attempts.append((None, False))  # before the `section` column existed
+    res = None
+    for sec, featured_column in attempts:
+        try:
+            res = _list_query(before, sec, search, featured_column)
+            break
+        except Exception:
+            traceback.print_exc()
+    if res is None:
+        if section != DEFAULT_SECTION:
+            # Most likely the `section` column hasn't been added (schema.sql).
+            return {"posts": [], "has_more": False}
+        raise HTTPException(status_code=500, detail="posts_fetch_failed")
+
+    rows = res.data or []
+    posts = rows[:PAGE_SIZE]
+    _attach_comments(posts)
     return {"posts": posts, "has_more": len(rows) > PAGE_SIZE}
+
+
+@router.get("/field/featured")
+async def list_featured(section: Section = DEFAULT_SECTION):
+    """Featured video posts for one page, most recently featured first."""
+    try:
+        res = (
+            get_supabase().table(TABLE)
+            .select(BASE_COLUMNS + ", section, featured_at")
+            .eq("is_public", True).eq("section", section)
+            .not_.is_("featured_at", "null")
+            .order("featured_at", desc=True).limit(MAX_FEATURED)
+            .execute()
+        )
+    except Exception:
+        # Most likely the `featured_at` column hasn't been added (schema.sql).
+        traceback.print_exc()
+        return {"posts": []}
+    posts = res.data or []
+    _attach_comments(posts)
+    return {"posts": posts}
+
+
+class FeaturePayload(BaseModel):
+    featured: bool
+
+
+@router.post("/field/posts/{post_id}/feature")
+async def feature_post(post_id: str, payload: FeaturePayload, admin: dict = Depends(require_admin)):
+    """Admins only: put a video post in (or take it out of) the featured spot."""
+    _check_uuid(post_id, "post")
+    sb = get_supabase()
+    rows = sb.table(TABLE).select("id, author, media").eq("id", post_id).limit(1).execute().data
+    if not rows:
+        raise HTTPException(status_code=404, detail="post_not_found")
+    if payload.featured and not any(m.get("type") == "video" for m in rows[0].get("media") or []):
+        raise HTTPException(status_code=400, detail="Only posts with a video can be featured.")
+    try:
+        updated = sb.table(TABLE).update({"featured_at": _now() if payload.featured else None}) \
+            .eq("id", post_id).execute().data[0]
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"feature_failed: {type(exc).__name__}")
+    log_event("field_post.featured" if payload.featured else "field_post.unfeatured",
+              route=f"/api/field/posts/{post_id}/feature", actor_id=admin["id"],
+              entity_type="field_post", entity_id=post_id,
+              message=f"{'Featured' if payload.featured else 'Unfeatured'} by {auth.full_name(admin)}"
+                      f" (post by {rows[0].get('author') or 'no name'})")
+    updated["comments"] = _comments_for([post_id]).get(post_id, [])
+    return {"post": updated}

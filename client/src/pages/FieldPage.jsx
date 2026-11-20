@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import FieldComments from '../components/FieldComments'
 import FieldPostEditor from '../components/FieldPostEditor'
-import { canPost, isAdmin, useCurrentUser } from '../lib/auth'
+import { apiFetch, canPost, isAdmin, readError, useCurrentUser } from '../lib/auth'
 import { FIELD_SECTIONS, SECTION_PATHS } from '../fieldSections'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -45,10 +45,20 @@ export default function FieldPage({ section = 'field' }) {
     }
   }
 
-  const load = async (before) => {
+  // Featured video posts (admins choose them). They show in the large spot at
+  // the top and are left out of the grid, except in search results.
+  const [featured, setFeatured] = useState([])
+  // What's typed in the search box, and the same text once typing pauses.
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  // Bumped on every new list request, so a slow, older response is ignored.
+  const requestId = useRef(0)
+
+  const load = async (before, q) => {
     const url = new URL(`${API_BASE}/api/field/posts`, window.location.origin)
     url.searchParams.set('section', section)
     if (before) url.searchParams.set('before', before)
+    if (q) url.searchParams.set('q', q)
     const res = await fetch(url)
     if (!res.ok) throw new Error('failed')
     return res.json()
@@ -56,32 +66,106 @@ export default function FieldPage({ section = 'field' }) {
 
   useEffect(() => {
     let cancelled = false
-    load()
-      .then((data) => {
-        if (cancelled) return
-        setPosts(data.posts || [])
-        setHasMore(!!data.has_more)
-      })
-      .catch(() => !cancelled && setError('Could not load posts.'))
-      .finally(() => !cancelled && setLoading(false))
+    const url = new URL(`${API_BASE}/api/field/featured`, window.location.origin)
+    url.searchParams.set('section', section)
+    fetch(url)
+      .then((res) => (res.ok ? res.json() : { posts: [] }))
+      .then((data) => !cancelled && setFeatured(data.posts || []))
+      .catch(() => {}) // the featured spot is optional; the grid still loads
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the route remounts this page per section (key in App.jsx)
   }, [])
 
+  // Search once typing pauses for 300 ms.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = search.trim()
+      if (q === query) return
+      setLoading(true)
+      setError(null)
+      setQuery(q)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, query])
+
+  // Load the first page on arrival and again whenever the search changes.
+  useEffect(() => {
+    const id = ++requestId.current
+    load(undefined, query)
+      .then((data) => {
+        if (id !== requestId.current) return
+        setPosts(data.posts || [])
+        setHasMore(!!data.has_more)
+      })
+      .catch(() => id === requestId.current && setError('Could not load posts.'))
+      .finally(() => id === requestId.current && setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load only reads `section`, fixed for this page
+  }, [query])
+
   const loadMore = async () => {
+    const id = requestId.current
     setLoadingMore(true)
     try {
-      const data = await load(posts[posts.length - 1]?.created_at)
+      const data = await load(posts[posts.length - 1]?.created_at, query)
+      if (id !== requestId.current) return
       setPosts((prev) => [...prev, ...(data.posts || [])])
       setHasMore(!!data.has_more)
     } catch {
-      setError('Could not load more posts.')
+      if (id === requestId.current) setError('Could not load more posts.')
     } finally {
       setLoadingMore(false)
     }
   }
+
+  const mergePost = (updated) => (list) => list.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+
+  // Admins only (the server checks too). Moves the post between the featured
+  // spot and the grid without reloading the page.
+  const toggleFeature = async (post, on) => {
+    const res = await apiFetch(`/api/field/posts/${post.id}/feature`, {
+      method: 'POST',
+      body: JSON.stringify({ featured: on }),
+    })
+    if (!res.ok) throw new Error(await readError(res, 'Could not change that post.'))
+    const updated = (await res.json()).post
+    if (on) {
+      setFeatured((prev) => [updated, ...prev.filter((p) => p.id !== updated.id)])
+      setPosts((prev) => (query ? mergePost(updated)(prev) : prev.filter((p) => p.id !== updated.id)))
+      return
+    }
+    setFeatured((prev) => prev.filter((p) => p.id !== updated.id))
+    setPosts((prev) => {
+      if (query || prev.some((p) => p.id === updated.id)) return mergePost(updated)(prev)
+      // Older than everything loaded so far: it'll come in with "Load more".
+      // (Adding it now would make Load more skip the posts in between.)
+      const last = prev[prev.length - 1]
+      if (hasMore && last && updated.created_at < last.created_at) return prev
+      return [...prev, updated].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    })
+  }
+
+  const renderFooter = (post) => (
+    <>
+      {user && (isAdmin(user) || post.user_id === user.id) && (
+        <FieldPostEditor
+          post={post}
+          onSaved={(updated) => {
+            setPosts(mergePost(updated))
+            setFeatured(mergePost(updated))
+          }}
+          onDeleted={(id) => {
+            setPosts((prev) => prev.filter((p) => p.id !== id))
+            setFeatured((prev) => prev.filter((p) => p.id !== id))
+          }}
+          featured={!!post.featured_at}
+          onToggleFeature={isAdmin(user) && hasVideo(post) ? (on) => toggleFeature(post, on) : undefined}
+        />
+      )}
+      <FieldComments key={user?.id || 'anon'} post={post} user={user} />
+    </>
+  )
 
   return (
     // Stone background with white text; see .field-stone in index.css.
@@ -156,16 +240,29 @@ export default function FieldPage({ section = 'field' }) {
 
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-5 mt-8">
         <SectionTabs />
-        <ViewToggle view={view} onChange={chooseView} />
+        <div className="flex items-center gap-5 w-full sm:w-auto">
+          <SearchBox value={search} onChange={setSearch} />
+          <ViewToggle view={view} onChange={chooseView} />
+        </div>
       </div>
       <div className="hairline mt-4" />
+
+      {/* Hidden while searching, so the results come first. */}
+      {!query && featured.length > 0 && (
+        <FeaturedSection
+          posts={featured}
+          onOpenImage={setLightbox}
+          renderFooter={renderFooter}
+          compact={view === 'feed'}
+        />
+      )}
 
       <div className="mt-14">
         {loading && <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>Loading…</p>}
         {error && <p style={{ color: 'var(--maroon-text)' }}>{error}</p>}
         {!loading && !error && posts.length === 0 && (
           <p style={{ color: 'var(--off-white)', opacity: 0.55 }}>
-            {copy.empty}
+            {query ? `No posts match “${query}”.` : copy.empty}
           </p>
         )}
         {posts.length > 0 && (
@@ -183,18 +280,7 @@ export default function FieldPage({ section = 'field' }) {
                 key={post.id}
                 post={post}
                 onOpenImage={setLightbox}
-                footer={
-                  <>
-                    {user && (isAdmin(user) || post.user_id === user.id) && (
-                      <FieldPostEditor
-                        post={post}
-                        onSaved={(updated) => setPosts((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))}
-                        onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
-                      />
-                    )}
-                    <FieldComments key={user?.id || 'anon'} post={post} user={user} />
-                  </>
-                }
+                footer={renderFooter(post)}
               />
               )
             })}
@@ -249,7 +335,9 @@ function SectionTabs() {
 }
 
 // Swipeable photos/videos for one post, with dots when there's more than one.
-function MediaCarousel({ post, onOpenImage, aspect }) {
+// fit="contain" shows the whole frame (letterboxed), so tall phone videos
+// aren't cropped in the wide featured spot.
+function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
   const media = post.media || []
   const [index, setIndex] = useState(0)
   const trackRef = useRef(null)
@@ -292,7 +380,7 @@ function MediaCarousel({ post, onOpenImage, aspect }) {
                 playsInline
                 preload="metadata"
                 className="w-full h-full"
-                style={{ objectFit: 'cover', backgroundColor: '#000' }}
+                style={{ objectFit: fit, backgroundColor: '#000' }}
               />
             ) : (
               <img
@@ -301,7 +389,7 @@ function MediaCarousel({ post, onOpenImage, aspect }) {
                 loading="lazy"
                 onClick={() => onOpenImage?.(m.url)}
                 className="w-full h-full"
-                style={{ objectFit: 'cover', cursor: onOpenImage ? 'zoom-in' : 'default' }}
+                style={{ objectFit: fit, cursor: onOpenImage ? 'zoom-in' : 'default' }}
               />
             )}
           </div>
@@ -350,7 +438,7 @@ function MediaCarousel({ post, onOpenImage, aspect }) {
 // More / Less toggle, which only appears when the text is actually cut off.
 const CAPTION_LINES = 5
 
-function ClampedCaption({ text }) {
+function ClampedCaption({ text, lines = CAPTION_LINES, fontSize = '0.9rem' }) {
   const ref = useRef(null)
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
@@ -364,14 +452,14 @@ function ClampedCaption({ text }) {
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [text, expanded])
+  }, [text, expanded, lines])
 
   return (
     <>
       <p
         ref={ref}
         style={{
-          fontSize: '0.9rem',
+          fontSize,
           lineHeight: 1.75,
           color: 'var(--off-white)',
           opacity: 0.8,
@@ -383,7 +471,7 @@ function ClampedCaption({ text }) {
             : {
                 display: '-webkit-box',
                 WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: CAPTION_LINES,
+                WebkitLineClamp: lines,
                 overflow: 'hidden',
               }),
         }}
@@ -414,21 +502,115 @@ function ClampedCaption({ text }) {
   )
 }
 
+const dateLabelStyle = {
+  color: 'var(--maroon-text)',
+  letterSpacing: '0.16em',
+  fontSize: '0.7rem',
+  marginTop: '1.25rem',
+  marginBottom: 0,
+}
+
+const hasVideo = (post) => (post.media || []).some((m) => m.type === 'video')
+
+// Featured spot (layout A, Nov 2026): a wide video with the caption beside it
+// on large screens, stacked on phones and in feed view. Dots switch between
+// featured posts when there's more than one.
+function FeaturedSection({ posts, onOpenImage, renderFooter, compact }) {
+  const [index, setIndex] = useState(0)
+  const i = Math.min(index, posts.length - 1)
+  const post = posts[i]
+  return (
+    <section aria-label="Featured" className={compact ? 'mt-14 max-w-xl mx-auto' : 'mt-14'}>
+      <p className="uppercase" style={{ ...dateLabelStyle, marginTop: 0 }}>Featured</p>
+      <div className={compact ? 'mt-4' : 'mt-4 grid grid-cols-1 lg:grid-cols-3 gap-x-10 gap-y-5 items-start'}>
+        <div className={compact ? '' : 'lg:col-span-2'}>
+          <MediaCarousel key={post.id} post={post} onOpenImage={onOpenImage} aspect="16 / 9" fit="contain" />
+        </div>
+        <div className={compact ? 'mt-5' : ''}>
+          <p className="uppercase" style={{ ...dateLabelStyle, marginTop: 0 }}>
+            {formatPostDate(post.created_at)}
+            {post.location ? ` · ${post.location}` : ''}
+          </p>
+          {post.caption && <ClampedCaption key={post.id} text={post.caption} lines={8} fontSize="1rem" />}
+          {post.author && (
+            <p style={{ fontSize: '0.8rem', color: 'var(--off-white)', opacity: 0.55, marginTop: '0.5rem', letterSpacing: '0.04em' }}>
+              — {post.author}
+            </p>
+          )}
+          {posts.length > 1 && (
+            <div className="flex gap-1" style={{ marginTop: '1rem', marginLeft: '-8px' }}>
+              {posts.map((p, n) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-label={`Show featured video ${n + 1} of ${posts.length}`}
+                  aria-current={n === i ? 'true' : undefined}
+                  onClick={() => setIndex(n)}
+                  className="flex items-center justify-center"
+                  style={{ width: 24, height: 24, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      backgroundColor: n === i ? 'var(--off-white)' : 'rgba(255,255,255,0.4)',
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          {renderFooter(post)}
+        </div>
+      </div>
+      <div className="hairline mt-14" />
+    </section>
+  )
+}
+
+function SearchBox({ value, onChange }) {
+  return (
+    <div
+      className="flex items-center gap-2 flex-1 sm:flex-none sm:w-56"
+      style={{ borderBottom: '1px solid rgba(255,255,255,0.75)' }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--off-white)', flexShrink: 0 }}>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-4-4" />
+      </svg>
+      <label htmlFor="field-search" className="sr-only">Search posts</label>
+      <input
+        id="field-search"
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search"
+        maxLength={100}
+        autoComplete="off"
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          padding: '6px 0',
+          fontFamily: 'inherit',
+          fontSize: '16px', // 16px+ stops iOS from zooming into the field
+          fontWeight: 300,
+          color: 'var(--off-white)',
+          colorScheme: 'dark', // light-colored clear (×) button
+        }}
+      />
+    </div>
+  )
+}
+
 // Grid view: compact card.
 export function FieldPostCard({ post, onOpenImage, footer }) {
   return (
     <article>
       <MediaCarousel post={post} onOpenImage={onOpenImage} aspect="4 / 3" />
-      <p
-        className="uppercase"
-        style={{
-          color: 'var(--maroon-text)',
-          letterSpacing: '0.16em',
-          fontSize: '0.7rem',
-          marginTop: '1.25rem',
-          marginBottom: 0,
-        }}
-      >
+      <p className="uppercase" style={dateLabelStyle}>
         {formatPostDate(post.created_at)}
         {post.location ? ` · ${post.location}` : ''}
       </p>

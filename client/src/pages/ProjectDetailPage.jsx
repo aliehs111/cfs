@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import ContactModal from '../components/ContactModal'
 import { isAdmin, useCurrentUser } from '../lib/auth'
 import Seo from '../components/Seo'
@@ -17,8 +17,26 @@ export default function ProjectDetailPage() {
     return project ? { slug, project, error: null } : { slug: null, project: null, error: null }
   })
   const [contactOpen, setContactOpen] = useState(false)
-  // Index of the photo open in the full-size viewer, or null when closed.
-  const [viewing, setViewing] = useState(null)
+  // The full-size viewer: { project, index } of the photo open, or null when
+  // closed. Its project can change ("Next project" in the viewer); closing
+  // then goes to that project's page.
+  const [viewer, setViewer] = useState(null)
+  const setViewing = (index) => setViewer({ project, index })
+  // All projects in the Projects page order, for "Previous/Next project".
+  const [allProjects, setAllProjects] = useState(() => readPreload('/projects')?.projects || null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!viewer || allProjects) return
+    let cancelled = false
+    fetch(`${API_BASE}/api/projects`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((data) => !cancelled && setAllProjects(data.projects || []))
+      .catch(() => {}) // without the list, the viewer just has no project arrows
+    return () => {
+      cancelled = true
+    }
+  }, [viewer, allProjects])
   const { user } = useCurrentUser()
   const loading = result.slug !== slug
   const project = loading ? null : result.project
@@ -260,12 +278,18 @@ export default function ProjectDetailPage() {
         </button>
       </div>
       <ContactModal isOpen={contactOpen} onClose={() => setContactOpen(false)} />
-      {viewing !== null && (
+      {viewer && (
         <PhotoViewer
-          project={project}
-          index={viewing}
-          onIndex={setViewing}
-          onClose={() => setViewing(null)}
+          project={viewer.project}
+          index={viewer.index}
+          projects={(allProjects || []).filter((p) => p.image_urls?.length)}
+          onIndex={(index) => setViewer((v) => ({ ...v, index }))}
+          onProject={(p) => setViewer({ project: p, index: 0 })}
+          onClose={() => {
+            const shown = viewer.project
+            setViewer(null)
+            if (shown.slug !== project.slug) navigate(`/projects/${shown.slug}`)
+          }}
         />
       )}
     </section>
@@ -287,10 +311,15 @@ function PhotoButton({ url, alt, onOpen, eager = false }) {
 }
 
 // Full-size photo viewer: Escape or a click outside the photo closes it;
-// arrows (buttons or keys) step through the project's photos. Focus moves
-// into the viewer and back to the photo that opened it.
-function PhotoViewer({ project, index, onIndex, onClose }) {
+// arrows (buttons or keys) step through the project's photos, and "Previous
+// project" / "Next project" at the bottom move to the neighbouring projects
+// (in the Projects page order). Focus moves into the viewer and back to the
+// photo that opened it.
+function PhotoViewer({ project, index, projects = [], onIndex, onProject, onClose }) {
   const images = project.image_urls || []
+  const at = projects.findIndex((p) => p.slug === project.slug)
+  const prevProject = at > 0 ? projects[at - 1] : null
+  const nextProject = at >= 0 && at < projects.length - 1 ? projects[at + 1] : null
   const count = images.length
   const box = useRef(null)
   const closeRef = useRef(onClose)
@@ -346,10 +375,25 @@ function PhotoViewer({ project, index, onIndex, onClose }) {
       }}
     >
       <img src={images[index]} alt={photoAlt(project, index)} />
-      {count > 1 && (
-        <p className="lightbox-count" aria-live="polite">
-          {index + 1} / {count}
-        </p>
+      <p className="lightbox-count" aria-live="polite">
+        {project.name}
+        {count > 1 && ` · ${index + 1} / ${count}`}
+      </p>
+      {(prevProject || nextProject) && (
+        <div className="viewer-jumps viewer-jumps-overlay">
+          {prevProject ? (
+            <button type="button" className="viewer-jump" onClick={() => onProject(prevProject)}>
+              ← Previous project
+            </button>
+          ) : (
+            <span />
+          )}
+          {nextProject && (
+            <button type="button" className="viewer-jump" onClick={() => onProject(nextProject)}>
+              Next project →
+            </button>
+          )}
+        </div>
       )}
       <button type="button" className="lightbox-btn lightbox-close" onClick={onClose} aria-label="Close photo viewer">
         ×

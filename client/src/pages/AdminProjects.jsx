@@ -74,7 +74,7 @@ function slugify(text) {
     .replace(/-+$/g, '')
 }
 
-export default function AdminProjects({ onUnauthorized, initialEditId }) {
+export default function AdminProjects({ onUnauthorized, initialEditId, onDirtyChange }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null) // null | 'new' | project
@@ -113,6 +113,7 @@ export default function AdminProjects({ onUnauthorized, initialEditId }) {
         project={editing === 'new' ? null : editing}
         projectTypes={data.project_types}
         onUnauthorized={onUnauthorized}
+        onDirtyChange={onDirtyChange}
         onCancel={() => setEditing(null)}
         onSaved={(p) => {
           setData((d) => ({
@@ -300,7 +301,7 @@ const emptyForm = {
   is_public: true,
 }
 
-function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, onUnauthorized }) {
+function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, onUnauthorized, onDirtyChange }) {
   const [form, setForm] = useState(() =>
     project
       ? Object.fromEntries(Object.keys(emptyForm).map((k) => [k, project[k] ?? emptyForm[k]]))
@@ -320,6 +321,12 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
   const snapshot = (f, list) => JSON.stringify([f, list.map((p) => p.path || p.url)])
   const [initial] = useState(() => snapshot(form, photos))
   const dirty = snapshot(form, photos) !== initial
+
+  // Tell the admin page, so switching admin tabs asks before discarding.
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+  }, [dirty, onDirtyChange])
 
   // Warn before a refresh or closing the tab would throw the edits away.
   useEffect(() => {

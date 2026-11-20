@@ -670,6 +670,59 @@ main {
   height: 44px;
   transform: translate(-50%, -50%);
 }
+/* "Previous post / Next post" (and project) links along the bottom of the
+   large viewers. Text buttons, quieter than the photo arrows. */
+.viewer-jumps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1rem 0.75rem;
+}
+.viewer-jumps-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.viewer-jump {
+  min-height: 44px;
+  padding: 0 0.5rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+.viewer-jump:hover {
+  color: #fff;
+}
+.viewer-jump:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.lightbox-count {
+  max-width: calc(100% - 120px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Grid/feed toggle: the buttons look 40x36 but take taps across 44x44. */
+.view-toggle-btn {
+  position: relative;
+}
+.view-toggle-btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
 /* Each photo/video in a post is a button that opens the large viewer. */
 .field-media-open {
   position: relative;

@@ -29,7 +29,7 @@ export default function FieldPage({ section = 'field' }) {
   const [error, setError] = useState(null)
   // The open photo/video viewer: { media, index, caption }, or null.
   const [lightbox, setLightbox] = useState(null)
-  const openMedia = (media, index, caption) => setLightbox({ media, index, caption })
+  const openMedia = (post, index) => setLightbox({ postId: post.id, index })
   const closeLightbox = useCallback(() => setLightbox(null), [])
   const { user, signOut } = useCurrentUser()
   const navigate = useNavigate()
@@ -335,9 +335,13 @@ export default function FieldPage({ section = 'field' }) {
 
       {lightbox && (
         <MediaLightbox
-          media={lightbox.media}
+          // Posts in the order they appear on the page (featured first), so
+          // "Previous post" / "Next post" in the viewer follow the page.
+          posts={[...(query ? [] : featured), ...posts].filter(
+            (p, i, all) => p.media?.length && all.findIndex((x) => x.id === p.id) === i,
+          )}
+          startPostId={lightbox.postId}
           start={lightbox.index}
-          caption={lightbox.caption}
           onClose={closeLightbox}
         />
       )}
@@ -414,7 +418,7 @@ function MediaCarousel({ post, onOpenMedia, aspect, fit = 'cover' }) {
               <button
                 type="button"
                 className="field-media-open"
-                onClick={() => onOpenMedia(media, i, post.caption)}
+                onClick={() => onOpenMedia(post, i)}
                 aria-label={m.type === 'video' ? `Play video${position(i)} in a larger player` : `Open photo${position(i)} larger`}
               >
                 {m.type === 'video' ? (
@@ -794,7 +798,7 @@ function ViewToggle({ view, onChange }) {
       aria-pressed={view === value}
       aria-label={label}
       title={label}
-      className="flex items-center justify-center"
+      className="view-toggle-btn flex items-center justify-center"
       style={{
         width: 40,
         height: 36,
@@ -854,17 +858,30 @@ function HardHatIcon() {
 }
 
 // Large viewer for one post's photos and videos. Opens on the item clicked;
-// arrows, arrow keys and swiping step through the rest. Escape, Close or a
-// click on the dark backdrop closes it, and focus goes back to the item that
-// opened it. Drawn on <body>, above the chat button (z-index 1000).
-function MediaLightbox({ media, start = 0, caption, onClose }) {
-  const [index, setIndex] = useState(start)
+// arrows, arrow keys and swiping step through the rest, and "Previous post" /
+// "Next post" at the bottom move to the neighbouring posts on the page.
+// Escape, Close or a click on the dark backdrop closes it, and focus goes
+// back to the item that opened it. Drawn on <body>, above the chat button
+// (z-index 1000).
+function MediaLightbox({ posts, startPostId, start = 0, onClose }) {
+  const [spot, setSpot] = useState({ postId: startPostId, index: start })
   const dialogRef = useRef(null)
   const closeRef = useRef(null)
   const touchX = useRef(null)
+  const postIndex = Math.max(0, posts.findIndex((p) => p.id === spot.postId))
+  const post = posts[postIndex]
+  const media = post?.media || []
+  const caption = post?.caption
+  const index = Math.min(spot.index, Math.max(0, media.length - 1))
+  const prevPost = postIndex > 0 ? posts[postIndex - 1] : null
+  const nextPost = postIndex < posts.length - 1 ? posts[postIndex + 1] : null
+  const jumpTo = (p) => setSpot({ postId: p.id, index: 0 })
   const count = media.length
   const item = media[index]
-  const go = useCallback((delta) => setIndex((i) => (i + delta + count) % count), [count])
+  const go = useCallback(
+    (delta) => setSpot((s) => ({ ...s, index: (Math.min(s.index, count - 1) + delta + count) % count })),
+    [count],
+  )
 
   // Move focus in, stop the page scrolling behind, and give focus back on close.
   useEffect(() => {
@@ -962,6 +979,22 @@ function MediaLightbox({ media, start = 0, caption, onClose }) {
         {count > 1 && arrow(-1)}
         {count > 1 && arrow(1)}
       </div>
+      {(prevPost || nextPost) && (
+        <div className="viewer-jumps">
+          {prevPost ? (
+            <button type="button" className="viewer-jump" onClick={() => jumpTo(prevPost)}>
+              ← Previous post
+            </button>
+          ) : (
+            <span />
+          )}
+          {nextPost && (
+            <button type="button" className="viewer-jump" onClick={() => jumpTo(nextPost)}>
+              Next post →
+            </button>
+          )}
+        </div>
+      )}
     </div>,
     document.body,
   )

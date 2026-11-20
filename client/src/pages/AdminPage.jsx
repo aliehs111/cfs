@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AdminLogs from './AdminLogs'
 import AdminNotifications from './AdminNotifications'
@@ -58,9 +58,18 @@ export default function AdminPage() {
   // Back button keeps it. Links like /admin?tab=projects&edit=<id> also open a
   // project directly.
   const tab = Object.values(TABS).includes(params.get('tab')) ? params.get('tab') : TABS.SUBMISSIONS
+  // True while the project editor has unsaved changes (it reports them), so
+  // switching tabs asks first instead of silently throwing the edits away.
+  const projectDirty = useRef(false)
   const setTab = (next) => {
-    if (next !== tab) setParams({ tab: next })
+    if (next === tab) return
+    if (projectDirty.current && !window.confirm('Discard your changes?')) return
+    projectDirty.current = false
+    setParams({ tab: next })
   }
+  const setProjectDirty = useCallback((dirty) => {
+    projectDirty.current = dirty
+  }, [])
   const editProjectId = tab === TABS.PROJECTS ? params.get('edit') : null
   const [contacts, setContacts] = useState([])
   const [intakes, setIntakes] = useState([])
@@ -217,7 +226,7 @@ export default function AdminPage() {
               </nav>
             </div>
 
-            {tab === TABS.PROJECTS && <AdminProjects onUnauthorized={handleUnauthorized} initialEditId={editProjectId} />}
+            {tab === TABS.PROJECTS && <AdminProjects onUnauthorized={handleUnauthorized} initialEditId={editProjectId} onDirtyChange={setProjectDirty} />}
             {tab === TABS.USERS && <AdminUsers me={me} onUnauthorized={handleUnauthorized} />}
             {tab === TABS.LOGS && <AdminLogs me={me} onUnauthorized={handleUnauthorized} />}
 

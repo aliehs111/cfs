@@ -65,7 +65,20 @@ export default function ProjectIntake() {
       })
 
       if (res.status === 429) throw new Error('rate_limit')
-      if (res.status === 400) throw new Error('bot_check')
+      if (res.status === 400) {
+        // The server says why (bot check failed, too long, empty). Show its
+        // words; only a failed bot check gets the bot-check message.
+        let detail = ''
+        try {
+          detail = (await res.json())?.detail || ''
+        } catch {
+          detail = ''
+        }
+        if (typeof detail !== 'string' || !detail || /bot/i.test(detail)) throw new Error('bot_check')
+        const err = new Error('server_message')
+        err.detail = detail
+        throw err
+      }
       if (!res.ok) throw new Error('unknown')
 
       const reader = res.body.getReader()
@@ -75,9 +88,15 @@ export default function ProjectIntake() {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value)
+        // stream: true keeps a character split across two chunks (é, —) intact.
+        const chunk = decoder.decode(value, { stream: true })
         fullText += chunk
         setStreamingText((prev) => prev + chunk)
+      }
+      const tail = decoder.decode()
+      if (tail) {
+        fullText += tail
+        setStreamingText((prev) => prev + tail)
       }
 
       if (
@@ -108,6 +127,9 @@ export default function ProjectIntake() {
         { role: 'assistant', content: finalText },
       ]
       setMessages(updatedMessages)
+      // Clear the answer box only once the answer went through, so a failed
+      // send keeps what the visitor typed.
+      setFollowupInput('')
 
       if (askedQuestion && canAskAnother) {
         setState(STATES.FOLLOWUP)
@@ -117,12 +139,14 @@ export default function ProjectIntake() {
     } catch (e) {
       if (e.message === 'bot_check') {
         setError(BOT_CHECK_FAILED)
+      } else if (e.message === 'server_message') {
+        setError(e.detail)
       } else if (e.message === 'rate_limit') {
         setError(
           "You've reached today's limit. Please come back tomorrow or contact us directly."
         )
       } else {
-        setError('Something went wrong. Please try again.')
+        setError("Couldn't send. Please try again.")
       }
       setState(newMessages.length === 1 ? STATES.INPUT : STATES.FOLLOWUP)
     }
@@ -131,20 +155,20 @@ export default function ProjectIntake() {
   const handleSubmitInitial = () => {
     if (currentInput.trim().length < 10) return
     const newMessages = [{ role: 'user', content: currentInput.trim() }]
-    const convId = newConversationId()
+    // A retry after an error keeps the same conversation.
+    const convId = conversationId || newConversationId()
     setConversationId(convId)
-    setMessages(newMessages)
     sendToServer(newMessages, convId)
   }
 
   const handleSubmitFollowup = () => {
     if (followupInput.trim().length < 2) return
+    // `messages` only gains this answer once the server replies, so a retry
+    // after an error doesn't send the answer twice.
     const newMessages = [
       ...messages,
       { role: 'user', content: followupInput.trim() },
     ]
-    setMessages(newMessages)
-    setFollowupInput('')
     sendToServer(newMessages)
   }
 
@@ -187,7 +211,7 @@ export default function ProjectIntake() {
     width: '100%',
     backgroundColor: 'transparent',
     border: 'none',
-    borderBottom: '1px solid rgba(236,228,215,0.15)',
+    borderBottom: '1px solid var(--field-line)',
     padding: '16px 0',
     fontFamily: 'var(--font-body, "DM Sans"), system-ui, sans-serif',
     fontSize: '15px',
@@ -350,6 +374,7 @@ export default function ProjectIntake() {
 
             {error && (
               <p
+                role="alert"
                 className="text-xs mt-4"
                 style={{ color: 'var(--maroon-text)', opacity: 0.9 }}
               >
@@ -369,7 +394,7 @@ export default function ProjectIntake() {
               <button
                 onClick={handleSubmitInitial}
                 disabled={currentInput.trim().length < 10}
-                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                className="tap-44 font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-20 disabled:cursor-not-allowed"
                 style={ctaStyle}
               >
                 Get Cavalier's Read →
@@ -437,6 +462,7 @@ export default function ProjectIntake() {
 
             {error && (
               <p
+                role="alert"
                 className="text-xs mt-4"
                 style={{ color: 'var(--maroon-text)', opacity: 0.9 }}
               >
@@ -448,7 +474,7 @@ export default function ProjectIntake() {
               <button
                 onClick={handleSubmitFollowup}
                 disabled={followupInput.trim().length < 2}
-                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-20 disabled:cursor-not-allowed"
+                className="tap-44 font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-20 disabled:cursor-not-allowed"
                 style={ctaStyle}
               >
                 Continue →
@@ -485,7 +511,7 @@ export default function ProjectIntake() {
                   stashAndContinue()
                   setContactOpen(true)
                 }}
-                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
+                className="tap-44 font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={{
                   color: 'var(--maroon-text)',
                   letterSpacing: '0.14em',
@@ -502,7 +528,7 @@ export default function ProjectIntake() {
               </button>
               <button
                 onClick={handleReset}
-                className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
+                className="tap-44 font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50"
                 style={{
                   color: 'var(--off-white)',
                   opacity: 0.55,

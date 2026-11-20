@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ContactModal from '../components/ContactModal'
 import { isAdmin, useCurrentUser } from '../lib/auth'
@@ -17,6 +17,8 @@ export default function ProjectDetailPage() {
     return project ? { slug, project, error: null } : { slug: null, project: null, error: null }
   })
   const [contactOpen, setContactOpen] = useState(false)
+  // Index of the photo open in the full-size viewer, or null when closed.
+  const [viewing, setViewing] = useState(null)
   const { user } = useCurrentUser()
   const loading = result.slug !== slug
   const project = loading ? null : result.project
@@ -180,14 +182,10 @@ export default function ProjectDetailPage() {
       {heroImage && (
         <div
           className="mt-12"
-          style={{
-            aspectRatio: '16 / 9',
-            backgroundImage: `url(${heroImage})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            border: '1px solid rgba(236, 228, 215, 0.08)',
-          }}
-        />
+          style={{ aspectRatio: '16 / 9', border: '1px solid rgba(236, 228, 215, 0.08)' }}
+        >
+          <PhotoButton url={heroImage} alt={photoAlt(project, 0)} onOpen={() => setViewing(0)} eager />
+        </div>
       )}
 
       <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-12">
@@ -230,14 +228,10 @@ export default function ProjectDetailPage() {
             {galleryImages.map((url, i) => (
               <div
                 key={i}
-                style={{
-                  aspectRatio: '4 / 3',
-                  backgroundImage: `url(${url})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  border: '1px solid rgba(236, 228, 215, 0.08)',
-                }}
-              />
+                style={{ aspectRatio: '4 / 3', border: '1px solid rgba(236, 228, 215, 0.08)' }}
+              >
+                <PhotoButton url={url} alt={photoAlt(project, i + 1)} onOpen={() => setViewing(i + 1)} />
+              </div>
             ))}
           </div>
         </div>
@@ -266,7 +260,111 @@ export default function ProjectDetailPage() {
         </button>
       </div>
       <ContactModal isOpen={contactOpen} onClose={() => setContactOpen(false)} />
+      {viewing !== null && (
+        <PhotoViewer
+          project={project}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </section>
+  )
+}
+
+function photoAlt(project, i) {
+  const count = project.image_urls?.length || 0
+  return count > 1 ? `${project.name}, photo ${i + 1} of ${count}` : project.name
+}
+
+// A project photo; clicking it opens the full-size viewer.
+function PhotoButton({ url, alt, onOpen, eager = false }) {
+  return (
+    <button type="button" className="photo-open" onClick={onOpen} aria-label={`View larger: ${alt}`}>
+      <img src={url} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" />
+    </button>
+  )
+}
+
+// Full-size photo viewer: Escape or a click outside the photo closes it;
+// arrows (buttons or keys) step through the project's photos. Focus moves
+// into the viewer and back to the photo that opened it.
+function PhotoViewer({ project, index, onIndex, onClose }) {
+  const images = project.image_urls || []
+  const count = images.length
+  const box = useRef(null)
+  const closeRef = useRef(onClose)
+  const indexRef = useRef({ index, count, onIndex })
+  useEffect(() => {
+    closeRef.current = onClose
+    indexRef.current = { index, count, onIndex }
+  })
+
+  useEffect(() => {
+    const opener = document.activeElement
+    box.current?.querySelector('.lightbox-close')?.focus()
+    const onKey = (e) => {
+      const { index: i, count: n, onIndex: setI } = indexRef.current
+      if (e.key === 'Escape') closeRef.current()
+      else if (e.key === 'ArrowRight' && n > 1) setI((i + 1) % n)
+      else if (e.key === 'ArrowLeft' && n > 1) setI((i - 1 + n) % n)
+      else if (e.key === 'Tab' && box.current) {
+        // Keep Tab inside the viewer.
+        const items = box.current.querySelectorAll('button')
+        const first = items[0]
+        const last = items[items.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+      if (opener instanceof HTMLElement) opener.focus()
+    }
+  }, [])
+
+  const go = (delta) => onIndex((index + delta + count) % count)
+
+  return (
+    <div
+      ref={box}
+      className="lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Photos of ${project.name}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <img src={images[index]} alt={photoAlt(project, index)} />
+      {count > 1 && (
+        <p className="lightbox-count" aria-live="polite">
+          {index + 1} / {count}
+        </p>
+      )}
+      <button type="button" className="lightbox-btn lightbox-close" onClick={onClose} aria-label="Close photo viewer">
+        ×
+      </button>
+      {count > 1 && (
+        <>
+          <button type="button" className="lightbox-btn lightbox-prev" onClick={() => go(-1)} aria-label="Previous photo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button type="button" className="lightbox-btn lightbox-next" onClick={() => go(1)} aria-label="Next photo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 

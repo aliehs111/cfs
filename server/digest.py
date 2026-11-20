@@ -45,7 +45,7 @@ def _own_host() -> str:
 
 def _local(ts: str) -> str:
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(EASTERN)
-    return dt.strftime("%a %b %-d")
+    return f"{dt:%a %b} {dt.day}"  # not "%-d": that crashes on Windows
 
 
 def build_digest(now: datetime | None = None) -> tuple[str, str, str]:
@@ -79,8 +79,9 @@ def build_digest(now: datetime | None = None) -> tuple[str, str, str]:
     intakes_prev = _fetch_all("project_responses", "id", prev_start, start)
     posts = _fetch_all("field_posts", "author, created_at", start, now)
 
-    start_label = start.astimezone(EASTERN).strftime("%b %-d")
-    end_label = now.astimezone(EASTERN).strftime("%b %-d, %Y")
+    s, e = start.astimezone(EASTERN), now.astimezone(EASTERN)
+    start_label = f"{s:%b} {s.day}"  # not "%-d": that crashes on Windows
+    end_label = f"{e:%b} {e.day}, {e:%Y}"
 
     fields = [
         ("Week", f"{start_label} – {end_label}"),

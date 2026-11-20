@@ -29,14 +29,38 @@ const quietButton = {
   padding: 0,
 }
 
+// Props that make a row open and close like a button: click, or Enter/Space
+// when it has keyboard focus. (Not a real <button> because the row holds
+// email and phone links.)
+function rowToggle(isOpen, toggle) {
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-expanded': isOpen,
+    onClick: toggle,
+    onKeyDown: (e) => {
+      if (e.target !== e.currentTarget) return // let the links inside work normally
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        toggle()
+      }
+    },
+  }
+}
+
 export default function AdminPage() {
   const navigate = useNavigate()
   const [me, setMe] = useState(null)
   // null = checking; true = signed in as an admin; 'forbidden' = signed in without admin access
   const [authed, setAuthed] = useState(null)
-  const [params] = useSearchParams()
-  // Links like /admin?tab=projects&edit=<id> open a tab (and a project) directly.
-  const [tab, setTab] = useState(() => (Object.values(TABS).includes(params.get('tab')) ? params.get('tab') : TABS.SUBMISSIONS))
+  const [params, setParams] = useSearchParams()
+  // The open tab lives in the URL (/admin?tab=projects), so a refresh or the
+  // Back button keeps it. Links like /admin?tab=projects&edit=<id> also open a
+  // project directly.
+  const tab = Object.values(TABS).includes(params.get('tab')) ? params.get('tab') : TABS.SUBMISSIONS
+  const setTab = (next) => {
+    if (next !== tab) setParams({ tab: next })
+  }
   const editProjectId = tab === TABS.PROJECTS ? params.get('edit') : null
   const [contacts, setContacts] = useState([])
   const [intakes, setIntakes] = useState([])
@@ -172,17 +196,18 @@ export default function AdminPage() {
                     key={key}
                     onClick={() => setTab(key)}
                     aria-current={tab === key ? 'page' : undefined}
-                    className="font-body text-xs font-medium tracking-widest uppercase transition-all duration-300"
+                    type="button"
+                    className="font-body text-xs font-medium tracking-widest uppercase transition-all duration-300 hover:opacity-70"
                     style={{
-                      color: tab === key ? 'var(--off-white)' : 'var(--maroon-text)',
+                      color: tab === key ? 'var(--off-white)' : 'rgba(236,228,215,0.55)',
                       letterSpacing: '0.14em',
                       background: 'none',
                       border: 'none',
                       borderBottom:
                         tab === key
-                          ? '1px solid rgba(236,228,215,0.4)'
+                          ? '1px solid var(--maroon)'
                           : '1px solid transparent',
-                      paddingBottom: '4px',
+                      padding: '8px 0 4px',
                       cursor: 'pointer',
                     }}
                   >
@@ -241,7 +266,7 @@ export default function AdminPage() {
                       >
                         <div
                           className="grid md:grid-cols-12 gap-4 cursor-pointer"
-                          onClick={() => setExpanded(isOpen ? null : c.id)}
+                          {...rowToggle(isOpen, () => setExpanded(isOpen ? null : c.id))}
                         >
                           <div className="md:col-span-3">
                             <p
@@ -378,9 +403,7 @@ export default function AdminPage() {
                       >
                         <div
                           className="grid md:grid-cols-12 gap-4 cursor-pointer"
-                          onClick={() =>
-                            setExpanded(isOpen ? null : `intake-${i.id}`)
-                          }
+                          {...rowToggle(isOpen, () => setExpanded(isOpen ? null : `intake-${i.id}`))}
                         >
                           <div className="md:col-span-3">
                             <p

@@ -97,7 +97,7 @@ class ProjectPayload(BaseModel):
     name: str = Field(max_length=200)
     slug: str = Field(max_length=120)
     project_type: str | None = None
-    flooring_type: str | None = Field(default=None, max_length=300)
+    flooring_type: str | None = Field(default=None, max_length=1000)  # several types, comma-separated
     location: str | None = Field(default=None, max_length=200)
     year: int | None = None
     square_footage: int | None = None

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
+// Longest question the server accepts (server/routes/chat.py).
+const MAX_MESSAGE_CHARS = 2000
 
 export default function ChatWidget() {
   const [open, setOpen] = useState(false)
@@ -14,6 +16,12 @@ export default function ChatWidget() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
+  const launcherRef = useRef(null)
+
+  const close = () => {
+    setOpen(false)
+    launcherRef.current?.focus()
+  }
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -39,6 +47,7 @@ export default function ChatWidget() {
       })
 
       if (res.status === 429) throw new Error('rate_limit')
+      if (res.status === 422) throw new Error('too_long')
       if (!res.ok) throw new Error('unknown')
 
       const reader = res.body.getReader()
@@ -48,16 +57,15 @@ export default function ChatWidget() {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value)
+        // stream: true keeps a character split across two chunks (é, —) intact.
+        const chunk = decoder.decode(value, { stream: true })
         fullText += chunk
-        setMessages((prev) => {
-          const updated = [...prev]
-          updated[updated.length - 1] = {
-            role: 'assistant',
-            content: updated[updated.length - 1].content + chunk,
-          }
-          return updated
-        })
+        appendToReply(chunk)
+      }
+      const tail = decoder.decode()
+      if (tail) {
+        fullText += tail
+        appendToReply(tail)
       }
 
       if (
@@ -90,15 +98,30 @@ export default function ChatWidget() {
           const updated = [...prev]
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: 'Something went wrong. Please try again.',
+            content:
+              e.message === 'too_long'
+                ? 'That was too long for this chat. Please shorten your question, or refresh the page to start a new chat.'
+                : "Couldn't send. Please try again.",
           }
           return updated
         })
       }
+      // Give the visitor their question back to retry.
+      setInput((current) => current || userMessage.content)
     } finally {
       setLoading(false)
     }
   }
+
+  const appendToReply = (text) =>
+    setMessages((prev) => {
+      const updated = [...prev]
+      updated[updated.length - 1] = {
+        role: 'assistant',
+        content: updated[updated.length - 1].content + text,
+      }
+      return updated
+    })
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -108,7 +131,16 @@ export default function ChatWidget() {
   }
 
   return (
-    <div style={{ position: 'fixed', bottom: '28px', right: '28px', zIndex: 1000 }}>
+    <div
+      style={{ position: 'fixed', bottom: '28px', right: '28px', zIndex: 1000 }}
+      onKeyDown={(e) => {
+        // Escape closes the chat and puts focus back on the chat button.
+        if (e.key === 'Escape' && open) {
+          e.stopPropagation()
+          close()
+        }
+      }}
+    >
       {/* Screen readers: read each finished reply once (not every streamed word). */}
       <p className="sr-only" aria-live="polite">
         {!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant'
@@ -161,14 +193,18 @@ export default function ChatWidget() {
               </p>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={close}
               style={{
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: 'rgba(236,228,215,0.55)',
+                color: 'rgba(236,228,215,0.7)',
                 fontSize: '18px',
                 lineHeight: 1,
+                width: '44px',
+                height: '44px',
+                marginRight: '-12px',
+                padding: 0,
               }}
               aria-label="Close chat"
             >
@@ -231,6 +267,7 @@ export default function ChatWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
+              maxLength={MAX_MESSAGE_CHARS}
               placeholder="Ask a question..."
               aria-label="Your question"
               autoFocus
@@ -239,7 +276,7 @@ export default function ChatWidget() {
                 flex: 1,
                 backgroundColor: 'transparent',
                 border: 'none',
-                borderBottom: '1px solid rgba(236,228,215,0.12)',
+                borderBottom: '1px solid var(--field-line)',
                 padding: '6px 0',
                 fontFamily: '"DM Sans", system-ui, sans-serif',
                 fontSize: '13px',
@@ -264,7 +301,11 @@ export default function ChatWidget() {
                 lineHeight: 1,
                 opacity: !input.trim() || loading ? 0.25 : 1,
                 transition: 'opacity 0.2s',
-                paddingBottom: '4px',
+                width: '44px',
+                height: '44px',
+                marginRight: '-10px',
+                marginBottom: '-8px',
+                padding: 0,
               }}
               aria-label="Send"
             >
@@ -275,6 +316,7 @@ export default function ChatWidget() {
       )}
 
       <button
+        ref={launcherRef}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls="chat-panel"

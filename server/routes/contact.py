@@ -75,6 +75,14 @@ async def submit_contact(request: Request, payload: ContactPayload):
     log_event("contact.submitted", route="/api/contact", entity_type="contact", entity_id=contact_id,
               message=f"{row['name']}" + (f" ({row['company']})" if row["company"] else ""))
 
+    try:
+        _contact_alert(row)
+    except Exception:
+        traceback.print_exc()  # the inquiry is saved and shows on the admin page
+    return {"status": "ok"}
+
+
+def _contact_alert(row: dict) -> None:
     who = row["name"] + (f" ({row['company']})" if row["company"] else "")
     text, html = render(
         "New website inquiry",
@@ -90,5 +98,3 @@ async def submit_contact(request: Request, payload: ContactPayload):
         footer="Reply to this email to answer them directly.",
     )
     alert("contact_submission", f"New website inquiry: {who}", text, html, reply_to=row["email"])
-
-    return {"status": "ok"}

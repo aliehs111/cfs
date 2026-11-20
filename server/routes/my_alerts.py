@@ -23,7 +23,7 @@ SUGGESTED = ["contact_submission", "field_post_created"]
 
 
 def _settings() -> dict[str, dict]:
-    rows = get_supabase().table("notification_settings").select("alert_type, enabled, recipients").execute().data or []
+    rows = get_supabase().table("notification_settings").select("alert_type, enabled, recipients, updated_at").execute().data or []
     return {r["alert_type"]: r for r in rows}
 
 
@@ -57,21 +57,41 @@ async def set_my_alert(alert_type: str, payload: Subscription, user: dict = Depe
     if alert_type not in ALERTS:
         raise HTTPException(status_code=404, detail="unknown_alert")
     email = user["email"].lower()
-    row = _settings().get(alert_type) or {"alert_type": alert_type, "enabled": True, "recipients": []}
-    recipients = [r for r in (row.get("recipients") or []) if r.lower() != email]
-    if payload.subscribed:
-        recipients.append(email)
-    get_supabase().table("notification_settings").upsert({
-        "alert_type": alert_type,
-        "enabled": row.get("enabled", True),
-        "recipients": recipients,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_by": auth.full_name(user),
-    }).execute()
+    _save_own_subscription(alert_type, email, payload.subscribed, auth.full_name(user))
     log_event("notifications.updated", route=f"/api/me/alerts/{alert_type}", actor_id=user["id"],
               entity_type="notification_setting", entity_id=alert_type,
               message=f"{auth.full_name(user)} {'subscribed to' if payload.subscribed else 'unsubscribed from'} {ALERTS[alert_type]['label']}")
     return {"alert_type": alert_type, "subscribed": payload.subscribed}
+
+
+def _save_own_subscription(alert_type: str, email: str, subscribed: bool, by: str) -> None:
+    """Add or remove one address without losing a change someone else saved at
+    the same moment: the update only applies if the row is unchanged since it
+    was read (same updated_at); otherwise read it again and retry."""
+    table = get_supabase().table("notification_settings")
+    for _ in range(5):
+        row = table.select("alert_type, enabled, recipients, updated_at").eq("alert_type", alert_type) \
+            .limit(1).execute().data
+        row = row[0] if row else None
+        recipients = [r for r in ((row or {}).get("recipients") or []) if r.lower() != email]
+        if subscribed:
+            recipients.append(email)
+        values = {
+            "recipients": recipients,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": by,
+        }
+        if row is None:
+            try:
+                table.insert({"alert_type": alert_type, "enabled": True, **values}).execute()
+                return
+            except Exception:
+                continue  # someone else created it first; read it and retry
+        query = table.update(values).eq("alert_type", alert_type)
+        query = query.eq("updated_at", row["updated_at"]) if row.get("updated_at") else query.is_("updated_at", "null")
+        if query.execute().data:
+            return
+    raise HTTPException(status_code=409, detail="Someone else changed these alerts just now. Please try again.")
 
 
 def move_recipient(old: str, new: str) -> None:

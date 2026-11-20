@@ -63,6 +63,8 @@ export default function FieldPostPage() {
   }
 
   return (
+    // Same stone background and white text as the public page (.field-stone).
+    <div className="field-stone" style={{ minHeight: 'calc(100vh - 74px)' }}>
     <section className="w-full max-w-2xl mx-auto px-6 pt-16 pb-24">
       <div className="flex items-center justify-between gap-4">
         <p
@@ -94,6 +96,7 @@ export default function FieldPostPage() {
         <PostManager user={user} onUnauthorized={() => navigate(LOGIN_PATH, { replace: true })} />
       )}
     </section>
+    </div>
   )
 }
 
@@ -116,6 +119,7 @@ function PostManager({ user, onUnauthorized }) {
   const [error, setError] = useState('')
   const [recent, setRecent] = useState([])
   const fileInput = useRef(null)
+  const doneRef = useRef(null)
   const itemsRef = useRef(items)
   useEffect(() => {
     itemsRef.current = items
@@ -144,6 +148,7 @@ function PostManager({ user, onUnauthorized }) {
 
   const addFiles = (fileList) => {
     setError('')
+    setStatus((s) => (s === 'done' ? 'idle' : s)) // starting the next post
     const next = [...items]
     for (const file of fileList) {
       if (next.length >= MAX_FILES) {
@@ -236,6 +241,23 @@ function PostManager({ user, onUnauthorized }) {
 
   const uploading = status === 'uploading'
 
+  // Warn before closing or reloading the tab mid-upload (a large video can
+  // take minutes on a job-site signal).
+  useEffect(() => {
+    if (!uploading) return
+    const warn = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
+
+  // The "Posted" message sits under the button; bring it into view.
+  useEffect(() => {
+    if (status === 'done') doneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [status])
+
   return (
     <>
       <h1
@@ -249,15 +271,6 @@ function PostManager({ user, onUnauthorized }) {
       >
         New post
       </h1>
-
-      {status === 'done' && (
-        <p style={{ marginTop: '1.5rem', fontSize: '0.9rem', color: 'var(--off-white)' }}>
-          Posted.{' '}
-          <Link to={SECTION_PATHS[section]} style={{ color: 'var(--off-white)', borderBottom: '1px solid var(--maroon)', textDecoration: 'none' }}>
-            See it on the site →
-          </Link>
-        </p>
-      )}
 
       <form onSubmit={submit}>
         <span style={labelStyle}>Post to</span>
@@ -417,6 +430,17 @@ function PostManager({ user, onUnauthorized }) {
         >
           {uploading ? 'Posting…' : 'Post to the website'}
         </button>
+        {/* Right under the button, where the eye already is. */}
+        <div role="status" ref={doneRef}>
+          {status === 'done' && (
+            <p style={{ marginTop: '1.25rem', fontSize: '0.95rem', color: 'var(--off-white)', textAlign: 'center' }}>
+              Posted.{' '}
+              <Link to={SECTION_PATHS[section]} style={{ color: 'var(--off-white)', borderBottom: '1px solid var(--maroon)', textDecoration: 'none' }}>
+                See it on the site →
+              </Link>
+            </p>
+          )}
+        </div>
       </form>
 
       {recent.length > 0 && (

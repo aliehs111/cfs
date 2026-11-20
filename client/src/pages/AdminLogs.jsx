@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch, readError } from '../lib/auth'
 
 const muted = 'rgba(236,228,215,0.55)'
@@ -175,20 +175,32 @@ export default function AdminLogs({ me, onUnauthorized }) {
     return () => clearTimeout(t)
   }, [search])
 
+  // Guards against a double click sending two requests for the same page.
+  const loadingMore = useRef(false)
   const loadMore = async () => {
     const last = result.logs[result.logs.length - 1]
-    if (!last) return
+    if (!last || loadingMore.current) return
+    loadingMore.current = true
+    const forKey = key // the filters these extra rows belong to
     setMore(true)
     try {
       const p = new URLSearchParams(params)
       p.set('before', last.created_at)
       const res = await apiFetch(`/api/admin/logs?${p}`)
+      if (res.status === 401 || res.status === 403) return onUnauthorized()
       if (!res.ok) throw new Error(await readError(res, 'Could not load more.'))
       const data = await res.json()
-      setResult((r) => ({ ...r, logs: [...r.logs, ...data.logs], hasMore: data.has_more }))
+      // If the filters changed while this was loading, these rows are for the
+      // old filters; drop them. Also skip any row already shown.
+      setResult((r) => {
+        if (r.key !== forKey) return r
+        const seen = new Set(r.logs.map((l) => l.id))
+        return { ...r, logs: [...r.logs, ...data.logs.filter((l) => !seen.has(l.id))], hasMore: data.has_more, error: '' }
+      })
     } catch (e) {
-      setResult((r) => ({ ...r, error: e.message }))
+      setResult((r) => (r.key === forKey ? { ...r, error: e.message } : r))
     } finally {
+      loadingMore.current = false
       setMore(false)
     }
   }

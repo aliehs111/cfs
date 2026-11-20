@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import FieldComments from '../components/FieldComments'
 import FieldPostEditor from '../components/FieldPostEditor'
 import { apiFetch, canPost, isAdmin, readError, useCurrentUser } from '../lib/auth'
@@ -26,8 +27,19 @@ export default function FieldPage({ section = 'field' }) {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
+  // The open photo/video viewer: { media, index, caption }, or null.
   const [lightbox, setLightbox] = useState(null)
+  const openMedia = (media, index, caption) => setLightbox({ media, index, caption })
+  const closeLightbox = useCallback(() => setLightbox(null), [])
   const { user, signOut } = useCurrentUser()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // The sign-in expired (30 days) while editing: sign out and come back here
+  // after signing in again.
+  const onUnauthorized = () => {
+    signOut()
+    navigate(`/login?next=${encodeURIComponent(pathname)}`)
+  }
   // Grid or Instagram-style feed; remembered on this device only.
   const [view, setView] = useState(() => {
     try {
@@ -105,6 +117,8 @@ export default function FieldPage({ section = 'field' }) {
   }, [query])
 
   const loadMore = async () => {
+    // Never mix pages from two searches: a new search is loading its first page.
+    if (loading) return
     const id = requestId.current
     setLoadingMore(true)
     try {
@@ -128,6 +142,10 @@ export default function FieldPage({ section = 'field' }) {
       method: 'POST',
       body: JSON.stringify({ featured: on }),
     })
+    if (res.status === 401) {
+      onUnauthorized()
+      throw new Error('Your sign-in expired. Sign in again.')
+    }
     if (!res.ok) throw new Error(await readError(res, 'Could not change that post.'))
     const updated = (await res.json()).post
     if (on) {
@@ -159,8 +177,13 @@ export default function FieldPage({ section = 'field' }) {
             setPosts((prev) => prev.filter((p) => p.id !== id))
             setFeatured((prev) => prev.filter((p) => p.id !== id))
           }}
+          onUnauthorized={onUnauthorized}
           featured={!!post.featured_at}
-          onToggleFeature={isAdmin(user) && hasVideo(post) ? (on) => toggleFeature(post, on) : undefined}
+          // Feature: video posts only. Unfeature stays available on a featured
+          // post even after its video is edited out, so it can't get stuck.
+          onToggleFeature={
+            isAdmin(user) && (hasVideo(post) || post.featured_at) ? (on) => toggleFeature(post, on) : undefined
+          }
         />
       )}
       <FieldComments key={user?.id || 'anon'} post={post} user={user} />
@@ -204,6 +227,7 @@ export default function FieldPage({ section = 'field' }) {
               <button
                 type="button"
                 onClick={signOut}
+                className="field-tap"
                 style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
               >
                 Sign out
@@ -251,7 +275,7 @@ export default function FieldPage({ section = 'field' }) {
       {!query && featured.length > 0 && (
         <FeaturedSection
           posts={featured}
-          onOpenImage={setLightbox}
+          onOpenMedia={openMedia}
           renderFooter={renderFooter}
           compact={view === 'feed'}
         />
@@ -279,20 +303,20 @@ export default function FieldPage({ section = 'field' }) {
               <Card
                 key={post.id}
                 post={post}
-                onOpenImage={setLightbox}
+                onOpenMedia={openMedia}
                 footer={renderFooter(post)}
               />
               )
             })}
           </div>
         )}
-        {hasMore && (
+        {hasMore && !loading && (
           <div className="mt-16 text-center">
             <button
               type="button"
               onClick={loadMore}
               disabled={loadingMore}
-              className="text-xs uppercase transition-opacity duration-300 hover:opacity-50"
+              className="field-tap text-xs uppercase transition-opacity duration-300 hover:opacity-50"
               style={{
                 color: 'var(--off-white)',
                 letterSpacing: '0.14em',
@@ -309,7 +333,14 @@ export default function FieldPage({ section = 'field' }) {
         )}
       </div>
 
-      {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox && (
+        <MediaLightbox
+          media={lightbox.media}
+          start={lightbox.index}
+          caption={lightbox.caption}
+          onClose={closeLightbox}
+        />
+      )}
     </section>
     </div>
   )
@@ -334,11 +365,14 @@ function SectionTabs() {
   )
 }
 
-// Swipeable photos/videos for one post, with dots when there's more than one.
-// fit="contain" shows the whole frame (letterboxed), so tall phone videos
-// aren't cropped in the wide featured spot.
-function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
+// Swipeable photos/videos for one post, with dots and arrows when there's
+// more than one. fit="contain" shows the whole frame (letterboxed), so tall
+// phone videos aren't cropped in the wide featured spot.
+// With onOpenMedia, each photo/video is a button that opens the large viewer
+// (videos play there). Without it (the staff posting page), videos play inline.
+function MediaCarousel({ post, onOpenMedia, aspect, fit = 'cover' }) {
   const media = post.media || []
+  const count = media.length
   const [index, setIndex] = useState(0)
   const trackRef = useRef(null)
 
@@ -350,18 +384,23 @@ function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
 
   const goTo = (i) => {
     const el = trackRef.current
-    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' })
+    if (el) el.scrollTo({ left: ((i + count) % count) * el.clientWidth, behavior: 'smooth' })
   }
 
+  // #t=0.001 makes iOS Safari render the first frame as a thumbnail
+  // (otherwise it shows black until play with preload="metadata").
+  const thumbSrc = (url) => (url.includes('#') ? url : `${url}#t=0.001`)
+  const position = (i) => (count > 1 ? ` ${i + 1} of ${count}` : '')
+
   return (
-    <div className="relative" style={{ border: '1px solid rgba(236, 228, 215, 0.08)' }}>
+    <div className="field-carousel relative" style={{ border: '1px solid rgba(236, 228, 215, 0.08)' }}>
       <div
         ref={trackRef}
         onScroll={onScroll}
         className="flex overflow-x-auto"
         style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none' }}
       >
-        {media.map((m) => (
+        {media.map((m, i) => (
           <div
             key={m.path || m.url}
             className="shrink-0 w-full"
@@ -371,11 +410,42 @@ function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
               backgroundColor: 'rgba(236, 228, 215, 0.04)',
             }}
           >
-            {m.type === 'video' ? (
+            {onOpenMedia ? (
+              <button
+                type="button"
+                className="field-media-open"
+                onClick={() => onOpenMedia(media, i, post.caption)}
+                aria-label={m.type === 'video' ? `Play video${position(i)} in a larger player` : `Open photo${position(i)} larger`}
+              >
+                {m.type === 'video' ? (
+                  <>
+                    <video
+                      src={thumbSrc(m.url)}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="w-full h-full"
+                      style={{ objectFit: fit, backgroundColor: '#000', pointerEvents: 'none' }}
+                    />
+                    <span className="field-play" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                    </span>
+                  </>
+                ) : (
+                  <img
+                    src={m.url}
+                    alt={post.caption || 'Cavalier crew at work'}
+                    loading="lazy"
+                    className="w-full h-full"
+                    style={{ objectFit: fit }}
+                  />
+                )}
+              </button>
+            ) : m.type === 'video' ? (
               <video
-                // #t=0.001 makes iOS Safari render the first frame as a thumbnail
-                // (otherwise it shows black until play with preload="metadata").
-                src={m.url.includes('#') ? m.url : `${m.url}#t=0.001`}
+                src={thumbSrc(m.url)}
                 controls
                 playsInline
                 preload="metadata"
@@ -387,48 +457,66 @@ function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
                 src={m.url}
                 alt={post.caption || 'Cavalier crew at work'}
                 loading="lazy"
-                onClick={() => onOpenImage?.(m.url)}
                 className="w-full h-full"
-                style={{ objectFit: fit, cursor: onOpenImage ? 'zoom-in' : 'default' }}
+                style={{ objectFit: fit }}
               />
             )}
           </div>
         ))}
       </div>
-      {media.length > 1 && (
-        <div
-          className="absolute flex gap-1.5"
-          style={{ bottom: '0.75rem', left: '50%', transform: 'translateX(-50%)' }}
-        >
-          {media.map((m, i) => (
-            <button
-              key={m.path || m.url}
-              type="button"
-              aria-label={`Show item ${i + 1} of ${media.length}`}
-              aria-current={i === index ? 'true' : undefined}
-              onClick={() => goTo(i)}
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                backgroundColor: i === index ? 'var(--off-white)' : 'rgba(236,228,215,0.4)',
-                boxShadow: '0 0 3px rgba(0,0,0,0.5)',
-              }}
-            />
-          ))}
-        </div>
-      )}
-      {media.length > 1 && (
-        <span
-          className="absolute text-xs"
-          aria-hidden="true"
-          style={{ top: '0.6rem', right: '0.6rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff' }}
-        >
-          {index + 1}/{media.length}
-        </span>
+      {count > 1 && (
+        <>
+          {/* Same arrows as the project cards: on hover/keyboard focus, and
+              always on touch screens. */}
+          <button
+            type="button"
+            className="project-arrow project-arrow-prev"
+            aria-label="Previous photo or video"
+            onClick={() => goTo(index - 1)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button
+            type="button"
+            className="project-arrow project-arrow-next"
+            aria-label="Next photo or video"
+            onClick={() => goTo(index + 1)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+          <div className="absolute flex" style={{ bottom: 0, left: '50%', transform: 'translateX(-50%)' }}>
+            {media.map((m, i) => (
+              <button
+                key={m.path || m.url}
+                type="button"
+                aria-label={`Show item ${i + 1} of ${count}`}
+                aria-current={i === index ? 'true' : undefined}
+                onClick={() => goTo(i)}
+                className="flex items-center justify-center"
+                // A bigger tap area around the small dot.
+                style={{ width: 22, height: 36, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    backgroundColor: i === index ? '#fff' : 'rgba(255,255,255,0.45)',
+                    boxShadow: '0 0 3px rgba(0,0,0,0.5)',
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+          <span
+            className="absolute text-xs"
+            aria-hidden="true"
+            style={{ top: '0.6rem', right: '0.6rem', padding: '2px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+          >
+            {index + 1}/{count}
+          </span>
+        </>
       )}
     </div>
   )
@@ -438,7 +526,8 @@ function MediaCarousel({ post, onOpenImage, aspect, fit = 'cover' }) {
 // More / Less toggle, which only appears when the text is actually cut off.
 const CAPTION_LINES = 5
 
-function ClampedCaption({ text, lines = CAPTION_LINES, fontSize = '0.9rem' }) {
+// prefix: shown in bold before the text (the poster's name in feed view).
+function ClampedCaption({ text, prefix, lines = CAPTION_LINES, fontSize = '0.9rem', style }) {
   const ref = useRef(null)
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
@@ -466,6 +555,7 @@ function ClampedCaption({ text, lines = CAPTION_LINES, fontSize = '0.9rem' }) {
           marginTop: '0.6rem',
           marginBottom: 0,
           whiteSpace: 'pre-line',
+          ...style,
           ...(expanded
             ? {}
             : {
@@ -476,6 +566,7 @@ function ClampedCaption({ text, lines = CAPTION_LINES, fontSize = '0.9rem' }) {
               }),
         }}
       >
+        {prefix && <span style={{ fontWeight: 500 }}>{prefix} </span>}
         {text}
       </p>
       {(overflows || expanded) && (
@@ -483,7 +574,7 @@ function ClampedCaption({ text, lines = CAPTION_LINES, fontSize = '0.9rem' }) {
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="text-xs uppercase transition-opacity duration-300 hover:opacity-50"
+          className="field-tap text-xs uppercase transition-opacity duration-300 hover:opacity-50"
           style={{
             color: 'var(--off-white)',
             letterSpacing: '0.14em',
@@ -515,7 +606,7 @@ const hasVideo = (post) => (post.media || []).some((m) => m.type === 'video')
 // Featured spot (layout A, Nov 2026): a wide video with the caption beside it
 // on large screens, stacked on phones and in feed view. Dots switch between
 // featured posts when there's more than one.
-function FeaturedSection({ posts, onOpenImage, renderFooter, compact }) {
+function FeaturedSection({ posts, onOpenMedia, renderFooter, compact }) {
   const [index, setIndex] = useState(0)
   const i = Math.min(index, posts.length - 1)
   const post = posts[i]
@@ -524,7 +615,7 @@ function FeaturedSection({ posts, onOpenImage, renderFooter, compact }) {
       <p className="uppercase" style={{ ...dateLabelStyle, marginTop: 0 }}>Featured</p>
       <div className={compact ? 'mt-4' : 'mt-4 grid grid-cols-1 lg:grid-cols-3 gap-x-10 gap-y-5 items-start'}>
         <div className={compact ? '' : 'lg:col-span-2'}>
-          <MediaCarousel key={post.id} post={post} onOpenImage={onOpenImage} aspect="16 / 9" fit="contain" />
+          <MediaCarousel key={post.id} post={post} onOpenMedia={onOpenMedia} aspect="16 / 9" fit="contain" />
         </div>
         <div className={compact ? 'mt-5' : ''}>
           <p className="uppercase" style={{ ...dateLabelStyle, marginTop: 0 }}>
@@ -538,7 +629,7 @@ function FeaturedSection({ posts, onOpenImage, renderFooter, compact }) {
             </p>
           )}
           {posts.length > 1 && (
-            <div className="flex gap-1" style={{ marginTop: '1rem', marginLeft: '-8px' }}>
+            <div className="flex" style={{ marginTop: '0.5rem', marginLeft: '-10px' }}>
               {posts.map((p, n) => (
                 <button
                   key={p.id}
@@ -547,7 +638,7 @@ function FeaturedSection({ posts, onOpenImage, renderFooter, compact }) {
                   aria-current={n === i ? 'true' : undefined}
                   onClick={() => setIndex(n)}
                   className="flex items-center justify-center"
-                  style={{ width: 24, height: 24, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  style={{ width: 28, height: 44, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                 >
                   <span
                     aria-hidden="true"
@@ -606,10 +697,10 @@ function SearchBox({ value, onChange }) {
 }
 
 // Grid view: compact card.
-export function FieldPostCard({ post, onOpenImage, footer }) {
+export function FieldPostCard({ post, onOpenMedia, footer }) {
   return (
     <article>
-      <MediaCarousel post={post} onOpenImage={onOpenImage} aspect="4 / 3" />
+      <MediaCarousel post={post} onOpenMedia={onOpenMedia} aspect="4 / 3" />
       <p className="uppercase" style={dateLabelStyle}>
         {formatPostDate(post.created_at)}
         {post.location ? ` · ${post.location}` : ''}
@@ -640,7 +731,7 @@ function initials(name) {
 }
 
 // Feed view: one post at a time, larger square media, poster up top.
-function FeedPostCard({ post, onOpenImage, footer }) {
+function FeedPostCard({ post, onOpenMedia, footer }) {
   const name = post.author || 'Cavalier crew'
   return (
     <article style={{ paddingBottom: '2.5rem', borderBottom: '1px solid rgba(236,228,215,0.08)' }}>
@@ -672,12 +763,17 @@ function FeedPostCard({ post, onOpenImage, footer }) {
           )}
         </span>
       </header>
-      <MediaCarousel post={post} onOpenImage={onOpenImage} aspect="1 / 1" />
+      <MediaCarousel post={post} onOpenMedia={onOpenMedia} aspect="1 / 1" />
+      {/* Clamped like the grid, so a long caption doesn't push the next post
+          far down the page; More shows the rest. */}
       {post.caption && (
-        <p style={{ fontSize: '0.92rem', lineHeight: 1.7, color: 'var(--off-white)', marginTop: '0.9rem', whiteSpace: 'pre-line' }}>
-          <span style={{ fontWeight: 500 }}>{name}</span>{' '}
-          <span style={{ opacity: 0.85 }}>{post.caption}</span>
-        </p>
+        <ClampedCaption
+          text={post.caption}
+          prefix={name}
+          lines={3}
+          fontSize="0.92rem"
+          style={{ lineHeight: 1.7, marginTop: '0.9rem', opacity: 0.9 }}
+        />
       )}
       <p
         className="uppercase"
@@ -757,44 +853,116 @@ function HardHatIcon() {
   )
 }
 
-function Lightbox({ src, onClose }) {
+// Large viewer for one post's photos and videos. Opens on the item clicked;
+// arrows, arrow keys and swiping step through the rest. Escape, Close or a
+// click on the dark backdrop closes it, and focus goes back to the item that
+// opened it. Drawn on <body>, above the chat button (z-index 1000).
+function MediaLightbox({ media, start = 0, caption, onClose }) {
+  const [index, setIndex] = useState(start)
+  const dialogRef = useRef(null)
+  const closeRef = useRef(null)
+  const touchX = useRef(null)
+  const count = media.length
+  const item = media[index]
+  const go = useCallback((delta) => setIndex((i) => (i + delta + count) % count), [count])
+
+  // Move focus in, stop the page scrolling behind, and give focus back on close.
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
+    const opener = document.activeElement
+    closeRef.current?.focus()
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      if (opener && typeof opener.focus === 'function') opener.focus()
     }
-  }, [onClose])
+  }, [])
 
-  return (
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && count > 1 && e.target.tagName !== 'VIDEO') {
+        // (On a focused video the arrow keys seek instead.)
+        e.preventDefault()
+        go(e.key === 'ArrowLeft' ? -1 : 1)
+      } else if (e.key === 'Tab') {
+        // Keep keyboard focus inside the viewer.
+        const nodes = dialogRef.current?.querySelectorAll('button, video[controls]')
+        if (!nodes || !nodes.length) return
+        const first = nodes[0]
+        const last = nodes[nodes.length - 1]
+        if (!dialogRef.current.contains(document.activeElement)) {
+          e.preventDefault()
+          first.focus()
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose, go, count])
+
+  const closeOnBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  const arrow = (dir) => (
+    <button
+      type="button"
+      className={`field-lightbox-arrow ${dir < 0 ? 'prev' : 'next'}`}
+      aria-label={dir < 0 ? 'Previous' : 'Next'}
+      onClick={() => go(dir)}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <path d={dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+      </svg>
+    </button>
+  )
+
+  return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
-      className="fixed inset-0 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.92)', zIndex: 100, cursor: 'zoom-out' }}
+      aria-label={item?.type === 'video' ? 'Video player' : 'Photo viewer'}
+      className="field-lightbox"
+      onClick={closeOnBackdrop}
     >
-      <img src={src} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute text-xs uppercase"
-        style={{
-          top: '1.25rem',
-          right: '1.5rem',
-          color: 'var(--off-white)',
-          letterSpacing: '0.14em',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
+      <div className="field-lightbox-bar">
+        <span aria-live="polite">{count > 1 ? `${index + 1} / ${count}` : ''}</span>
+        <button ref={closeRef} type="button" onClick={onClose} className="field-lightbox-close">
+          Close ✕
+        </button>
+      </div>
+      <div
+        className="field-lightbox-stage"
+        onClick={closeOnBackdrop}
+        onTouchStart={(e) => {
+          touchX.current = e.touches[0].clientX
+        }}
+        onTouchEnd={(e) => {
+          if (touchX.current === null || count < 2) return
+          const dx = e.changedTouches[0].clientX - touchX.current
+          touchX.current = null
+          if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1)
         }}
       >
-        Close ✕
-      </button>
-    </div>
+        {item?.type === 'video' ? (
+          <video key={item.url} src={item.url} controls autoPlay playsInline className="field-lightbox-media" />
+        ) : (
+          <img key={item?.url} src={item?.url} alt={caption || 'Cavalier crew at work'} className="field-lightbox-media" />
+        )}
+        {count > 1 && arrow(-1)}
+        {count > 1 && arrow(1)}
+      </div>
+    </div>,
+    document.body,
   )
 }

@@ -92,6 +92,39 @@ def _public_url(path: str) -> str:
     return f"{base}/storage/v1/object/public/{BUCKET}/{path}"
 
 
+def _owner_tag(user: dict) -> str:
+    """Upload file names start with this, so a path shows who uploaded it."""
+    return user["id"].replace("-", "")
+
+
+def _check_new_media_path(path: str, user: dict) -> None:
+    """Only accept paths shaped like the ones /upload-url hands out, and only
+    files this user uploaded. Without the owner check, someone could add
+    another post's file to their own post, remove it, and so delete it."""
+    name = path.rsplit("/", 1)[-1]
+    if ".." in path or path.count("/") != 2 or name.rsplit(".", 1)[-1] not in EXTENSIONS.values():
+        raise HTTPException(status_code=400, detail="invalid_media_path")
+    if not name.startswith(_owner_tag(user) + "_"):
+        raise HTTPException(status_code=400, detail="invalid_media_path")
+
+
+def _missing_column(exc: Exception) -> bool:
+    """True when a query failed only because a column hasn't been added yet
+    (Postgres error 42703), so callers can fall back to the older schema.
+    Any other failure (network, timeout, ...) should not be hidden."""
+    text = str(exc)
+    return "42703" in text or ("column" in text and "does not exist" in text)
+
+
+def _parse_before(before: str | None) -> str | None:
+    if not before:
+        return None
+    try:
+        return datetime.fromisoformat(before.replace("Z", "+00:00")).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid_before")
+
+
 def _media_type(path: str) -> str:
     ext = path.rsplit(".", 1)[-1].lower()
     return "video" if ext in {"mp4", "mov", "webm"} else "image"
@@ -112,7 +145,8 @@ async def create_upload_url(payload: UploadUrlPayload, staff: dict = Depends(req
         raise HTTPException(status_code=400, detail="unsupported_file_type")
 
     now = datetime.now(timezone.utc)
-    path = f"{now:%Y/%m}/{uuid.uuid4().hex}.{ext}"
+    # The file name starts with the uploader's id (see _check_new_media_path).
+    path = f"{now:%Y/%m}/{_owner_tag(staff)}_{uuid.uuid4().hex}.{ext}"
     try:
         signed = get_supabase().storage.from_(BUCKET).create_signed_upload_url(path)
     except Exception as exc:
@@ -148,10 +182,7 @@ async def create_post(payload: CreatePostPayload, staff: dict = Depends(require_
     media = []
     for item in payload.media:
         path = item.path.strip()
-        # Only accept paths shaped like the ones /upload-url hands out.
-        name = path.rsplit("/", 1)[-1]
-        if ".." in path or path.count("/") != 2 or name.rsplit(".", 1)[-1] not in EXTENSIONS.values():
-            raise HTTPException(status_code=400, detail="invalid_media_path")
+        _check_new_media_path(path, staff)
         media.append({"path": path, "url": _public_url(path), "type": _media_type(path)})
 
     row = {
@@ -172,7 +203,12 @@ async def create_post(payload: CreatePostPayload, staff: dict = Depends(require_
         raise HTTPException(status_code=500, detail=f"post_create_failed: {type(exc).__name__}")
 
     post = (res.data or [row])[0]
-    _post_created_alert(post, media, staff)
+    try:
+        _post_created_alert(post, media, staff)
+    except Exception:
+        # The post is saved; a failed email must not make the poster retry
+        # and create a duplicate.
+        traceback.print_exc()
     return {"post": post}
 
 
@@ -210,7 +246,7 @@ async def delete_post(post_id: str, staff: dict = Depends(require_poster)):
     try:
         res = (
             supabase.table(TABLE)
-            .select("media, caption, location, author, user_id, created_at")
+            .select("*")
             .eq("id", post_id)
             .limit(1)
             .execute()
@@ -241,20 +277,28 @@ async def delete_post(post_id: str, staff: dict = Depends(require_poster)):
               entity_id=post_id, message=f"Deleted by {deleted_by}",
               metadata={"author": deleted.get("author"), "caption": (deleted.get("caption") or "")[:200]})
     created = deleted.get("created_at") or ""
+    page_name = SECTION_PAGES.get(deleted.get("section") or DEFAULT_SECTION, SECTION_PAGES[DEFAULT_SECTION])[0]
+    try:
+        _post_deleted_alert(deleted, deleted_by, created, page_name, len(paths))
+    except Exception:
+        traceback.print_exc()  # the post is already deleted
+    return {"status": "ok"}
+
+
+def _post_deleted_alert(deleted: dict, deleted_by: str, created: str, page_name: str, files: int) -> None:
     text, html = render(
-        "An In the Field post was deleted",
+        f"A {page_name} post was deleted",
         [
             ("Deleted by", deleted_by),
             ("Originally posted by", deleted.get("author")),
             ("Originally posted", created[:10]),
             ("Location", deleted.get("location")),
-            ("Files removed", str(len(paths))),
+            ("Files removed", str(files)),
             ("Deleted", eastern_now()),
         ],
         [("Caption", deleted.get("caption"))],
     )
-    alert("field_post_deleted", f"In the Field post deleted ({deleted.get('author') or 'no name'})", text, html)
-    return {"status": "ok"}
+    alert("field_post_deleted", f"{page_name} post deleted ({deleted.get('author') or 'no name'})", text, html)
 
 
 class UpdatePostPayload(BaseModel):
@@ -271,7 +315,8 @@ class UpdatePostPayload(BaseModel):
 async def update_post(post_id: str, payload: UpdatePostPayload, staff: dict = Depends(require_poster)):
     _check_uuid(post_id, "post")
     sb = get_supabase()
-    res = sb.table(TABLE).select("id, user_id, author, media").eq("id", post_id).limit(1).execute()
+    # "*" so this works whether or not the newer columns (section, featured_at) exist.
+    res = sb.table(TABLE).select("*").eq("id", post_id).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="post_not_found")
     existing = res.data[0]
@@ -299,13 +344,15 @@ async def update_post(post_id: str, payload: UpdatePostPayload, staff: dict = De
             if path in current:
                 media.append(current[path])
                 continue
-            name = path.rsplit("/", 1)[-1]
-            if ".." in path or path.count("/") != 2 or name.rsplit(".", 1)[-1] not in EXTENSIONS.values():
-                raise HTTPException(status_code=400, detail="invalid_media_path")
+            _check_new_media_path(path, staff)
             media.append({"path": path, "url": _public_url(path), "type": _media_type(path)})
         kept = {m["path"] for m in media}
         removed_paths = [p for p in current if p not in kept]
         changes["media"] = media
+        # Only video posts can be featured: if the edit removed the last video,
+        # take the post out of the featured spot so it can't get stuck there.
+        if existing.get("featured_at") and not any(m.get("type") == "video" for m in media):
+            changes["featured_at"] = None
 
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to change.")
@@ -517,6 +564,7 @@ async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTI
                      q: str = Query(default="", max_length=100)):
     """Newest first, PAGE_SIZE at a time, for one page (section). Pass the last
     post's created_at as `before`. `q` is a keyword search."""
+    before = _parse_before(before)
     search = _search_filter(q)
     if q.strip() and not search:
         return {"posts": [], "has_more": False}
@@ -529,8 +577,12 @@ async def list_posts(before: str | None = None, section: Section = DEFAULT_SECTI
         try:
             res = _list_query(before, sec, search, featured_column)
             break
-        except Exception:
+        except Exception as exc:
             traceback.print_exc()
+            if not _missing_column(exc):
+                # A real failure, not an older schema: falling back would show
+                # featured posts twice or the other page's posts.
+                raise HTTPException(status_code=500, detail="posts_fetch_failed")
     if res is None:
         if section != DEFAULT_SECTION:
             # Most likely the `section` column hasn't been added (schema.sql).
@@ -555,10 +607,11 @@ async def list_featured(section: Section = DEFAULT_SECTION):
             .order("featured_at", desc=True).limit(MAX_FEATURED)
             .execute()
         )
-    except Exception:
-        # Most likely the `featured_at` column hasn't been added (schema.sql).
+    except Exception as exc:
         traceback.print_exc()
-        return {"posts": []}
+        if not _missing_column(exc):
+            raise HTTPException(status_code=500, detail="featured_fetch_failed")
+        return {"posts": []}  # the `featured_at` column hasn't been added (schema.sql)
     posts = res.data or []
     _attach_comments(posts)
     return {"posts": posts}
@@ -573,11 +626,24 @@ async def feature_post(post_id: str, payload: FeaturePayload, admin: dict = Depe
     """Admins only: put a video post in (or take it out of) the featured spot."""
     _check_uuid(post_id, "post")
     sb = get_supabase()
-    rows = sb.table(TABLE).select("id, author, media").eq("id", post_id).limit(1).execute().data
+    rows = sb.table(TABLE).select("*").eq("id", post_id).limit(1).execute().data
     if not rows:
         raise HTTPException(status_code=404, detail="post_not_found")
     if payload.featured and not any(m.get("type") == "video" for m in rows[0].get("media") or []):
         raise HTTPException(status_code=400, detail="Only posts with a video can be featured.")
+    if payload.featured and not rows[0].get("featured_at"):
+        # The page shows at most MAX_FEATURED; refuse more rather than hide one.
+        section = rows[0].get("section") or DEFAULT_SECTION
+        count = (
+            sb.table(TABLE).select("id", count="exact")
+            .eq("is_public", True).eq("section", section)
+            .not_.is_("featured_at", "null").execute().count or 0
+        )
+        if count >= MAX_FEATURED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Up to {MAX_FEATURED} featured videos per page. Unfeature one first.",
+            )
     try:
         updated = sb.table(TABLE).update({"featured_at": _now() if payload.featured else None}) \
             .eq("id", post_id).execute().data[0]

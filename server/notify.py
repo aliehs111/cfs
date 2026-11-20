@@ -70,7 +70,9 @@ def site_url(path: str = "") -> str | None:
 
 
 def eastern_now() -> str:
-    return datetime.now(EASTERN).strftime("%a %b %-d, %Y at %-I:%M %p ET")
+    # No "%-d"/"%-I": those only work on Linux/macOS and crash on Windows.
+    d = datetime.now(EASTERN)
+    return f"{d:%a %b} {d.day}, {d:%Y} at {d.hour % 12 or 12}:{d:%M %p} ET"
 
 
 def render(

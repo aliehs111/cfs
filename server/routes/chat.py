@@ -1,9 +1,10 @@
 import os
 import traceback
 import anthropic
-from fastapi import APIRouter, Request
+from typing import Literal
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from limiter import limiter
 from logger import log_event
 from notify import report_server_error
@@ -22,18 +23,34 @@ SYSTEM_PROMPT = """You are the assistant for Cavalier Flooring Systems. The cont
 {knowledge_base}"""
 
 
+# Limits on what a visitor can send. Every message goes to the AI, which is
+# billed by length, so without these one visitor could run up the bill.
+MAX_MESSAGE_CHARS = 2000      # one message (the chat box has the same limit)
+MAX_MESSAGES = 70             # both sides; the 30/day limit allows ~60
+MAX_TOTAL_CHARS = 60000       # both sides (about 15k tokens)
+
+
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)  # AI replies are capped by max_tokens
 
 
 class ChatPayload(BaseModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(max_length=MAX_MESSAGES)
 
 
 @router.post("/chat")
 @limiter.limit("30/day")
 async def chat(request: Request, payload: ChatPayload):
+    # 422 for "too long": the chat widget shows its "too long" message for it.
+    msgs = payload.messages
+    if not msgs or msgs[-1].role != "user" or not msgs[-1].content.strip():
+        raise HTTPException(status_code=400, detail="Please type a message.")
+    if any(m.role == "user" and len(m.content) > MAX_MESSAGE_CHARS for m in msgs):
+        raise HTTPException(status_code=422, detail=f"Please keep messages under {MAX_MESSAGE_CHARS} characters.")
+    if sum(len(m.content) for m in msgs) > MAX_TOTAL_CHARS:
+        raise HTTPException(status_code=422, detail="This conversation is too long. Please refresh the page to start a new one, or use the contact form.")
+
     knowledge_base = get_knowledge_base()
     system = SYSTEM_PROMPT.format(knowledge_base=knowledge_base)
 

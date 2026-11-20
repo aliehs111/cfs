@@ -91,8 +91,9 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
 
   const labelColor = isDark ? 'rgba(236,228,215,0.55)' : 'rgba(26,24,22,0.75)'
   const fieldColor = isDark ? 'var(--off-white)' : 'var(--charcoal)'
-  // Light: 3:1 against ivory, the recommended minimum for a field's outline.
-  const fieldUnderline = isDark ? 'rgba(236,228,215,0.15)' : 'rgba(26,24,22,0.48)'
+  // At least 3:1 against the background (the minimum for a field's outline),
+  // so visitors can see where to type. Dark: ~4:1 on charcoal.
+  const fieldUnderline = isDark ? 'var(--field-line)' : 'rgba(26,24,22,0.48)'
   const fieldUnderlineFocus = isDark ? 'var(--off-white)' : 'var(--maroon)'
   // Light: a second 1px of maroon under the line, so focus reads clearly without
   // changing the field's size.
@@ -303,7 +304,7 @@ export default function ContactForm({ theme = 'light', onSuccess }) {
       <button
         type="submit"
         disabled={status === 'submitting'}
-        className="font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-30"
+        className="tap-44 font-body text-xs font-medium tracking-widest uppercase transition-opacity duration-300 hover:opacity-50 disabled:opacity-30"
         style={{
           color: buttonColor,
           letterSpacing: '0.14em',

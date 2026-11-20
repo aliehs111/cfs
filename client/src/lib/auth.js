@@ -49,6 +49,16 @@ export async function readError(res, fallback) {
   try {
     const data = await res.json()
     if (typeof data.detail === 'string') return data.detail
+    // FastAPI's 422 errors are a list like [{loc: ['body', 'flooring_type'], msg: '...'}].
+    if (Array.isArray(data.detail) && data.detail.length) {
+      return data.detail
+        .map((d) => {
+          const field = (d.loc || []).filter((x) => x !== 'body').join(' ').replace(/_/g, ' ')
+          const msg = (d.msg || '').replace(/^Value error, /, '')
+          return field ? `${field[0].toUpperCase()}${field.slice(1)}: ${msg}` : msg
+        })
+        .join(' ')
+    }
   } catch {
     /* not JSON */
   }

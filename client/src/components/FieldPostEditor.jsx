@@ -45,7 +45,10 @@ const label = {
   marginTop: '1rem',
 }
 
-// onToggleFeature: passed only for admins on video posts. Called with true to
+const SESSION_ENDED = 'Your sign-in expired. Sign in again.'
+
+// onToggleFeature: passed only for admins (video posts, or a post that is
+// already featured so it can be unfeatured). Called with true to
 // feature the post, false to unfeature it; throws with a message on failure.
 export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthorized, featured = false, onToggleFeature }) {
   const [editing, setEditing] = useState(false)
@@ -71,11 +74,15 @@ export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthoriz
     setError('')
     try {
       const res = await apiFetch(`/api/field/posts/${post.id}`, { method: 'DELETE' })
-      if (res.status === 401) return onUnauthorized?.()
+      if (res.status === 401) {
+        setBusy(false)
+        setError(SESSION_ENDED)
+        return onUnauthorized?.()
+      }
       if (!res.ok) throw new Error(await readError(res, 'Could not delete that post.'))
       onDeleted(post.id)
     } catch (e) {
-      setError(e.message)
+      setError(e.message || 'Could not delete that post.')
       setBusy(false)
     }
   }
@@ -97,11 +104,11 @@ export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthoriz
   return (
     <div style={{ marginTop: '0.9rem' }}>
       <div className="flex gap-6">
-        <button type="button" onClick={() => setEditing(true)} disabled={busy} style={textButton}>
+        <button type="button" onClick={() => setEditing(true)} disabled={busy} className="field-tap" style={textButton}>
           Edit
         </button>
         {onToggleFeature && (
-          <button type="button" onClick={toggleFeature} disabled={busy || featuring} style={textButton}>
+          <button type="button" onClick={toggleFeature} disabled={busy || featuring} className="field-tap" style={textButton}>
             {featuring ? 'Saving…' : featured ? 'Unfeature' : 'Feature'}
           </button>
         )}
@@ -109,7 +116,7 @@ export default function FieldPostEditor({ post, onSaved, onDeleted, onUnauthoriz
           type="button"
           onClick={remove}
           disabled={busy}
-          style={{ ...textButton, color: 'var(--maroon-text)', borderBottomColor: 'rgba(217,86,107,0.4)' }}
+          className="field-tap" style={{ ...textButton, color: 'var(--maroon-text)', borderBottomColor: 'rgba(217,86,107,0.4)' }}
         >
           {busy ? 'Deleting…' : 'Delete'}
         </button>
@@ -136,13 +143,19 @@ function EditForm({ post, onSaved, onCancel, onUnauthorized }) {
     try {
       const { blob, type: sendType } = type.startsWith('image/') ? await prepareImage(file) : { blob: file, type }
       const res = await apiFetch('/api/field/upload-url', { method: 'POST', body: JSON.stringify({ content_type: sendType }) })
-      if (res.status === 401 || res.status === 403) return onUnauthorized?.()
+      if (res.status === 401 || res.status === 403) {
+        update(key, { status: 'error', note: 'Sign in again' })
+        return onUnauthorized?.()
+      }
       if (!res.ok) throw new Error(await readError(res, 'Upload failed.'))
       const { path, upload_url } = await res.json()
       await putWithProgress(upload_url, blob, sendType, (p) => update(key, { note: `${Math.round(p * 100)}%` }))
       update(key, { path, status: 'done', note: '' })
     } catch (e) {
-      update(key, { status: 'error', note: e.message === 'network' ? 'Upload failed' : e.message })
+      update(key, {
+        status: 'error',
+        note: !e.message || e.message === 'network' || e.message.startsWith('upload ') ? 'Upload failed' : e.message,
+      })
     }
   }
 
@@ -158,6 +171,11 @@ function EditForm({ post, onSaved, onCancel, onUnauthorized }) {
       const type = fileType(file)
       if (!type.startsWith('image/') && !type.startsWith('video/')) {
         setError(`${file.name} isn't a photo or video.`)
+        continue
+      }
+      // Same rule as a new post (FieldPostPage): most browsers can't show HEIC.
+      if (type === 'image/heic' || type === 'image/heif') {
+        setError(`${file.name} is a HEIC photo, which most browsers can't show. Post it from your phone's photo library, or export it as JPEG.`)
         continue
       }
       if (type.startsWith('video/') && file.size > MAX_VIDEO_MB * 1024 * 1024) {
@@ -194,11 +212,14 @@ function EditForm({ post, onSaved, onCancel, onUnauthorized }) {
         method: 'PATCH',
         body: JSON.stringify({ caption, location, media: media.map((m) => ({ path: m.path })) }),
       })
-      if (res.status === 401) return onUnauthorized?.()
+      if (res.status === 401) {
+        setError(SESSION_ENDED)
+        return onUnauthorized?.()
+      }
       if (!res.ok) throw new Error(await readError(res, 'Could not save.'))
       onSaved((await res.json()).post)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Could not save.')
     } finally {
       setBusy(false)
     }
@@ -260,10 +281,10 @@ function EditForm({ post, onSaved, onCancel, onUnauthorized }) {
 
       {error && <p role="alert" style={{ color: 'var(--maroon-text)', fontSize: '0.8rem', marginTop: '0.75rem' }}>{error}</p>}
       <div className="flex gap-6" style={{ marginTop: '1rem' }}>
-        <button type="submit" disabled={busy || uploading} style={{ ...textButton, opacity: busy || uploading ? 0.5 : 1 }}>
+        <button type="submit" disabled={busy || uploading} className="field-tap" style={{ ...textButton, opacity: busy || uploading ? 0.5 : 1 }}>
           {busy ? 'Saving…' : uploading ? 'Uploading…' : 'Save'}
         </button>
-        <button type="button" onClick={onCancel} disabled={busy} style={{ ...textButton, borderBottom: 'none', opacity: 0.7 }}>
+        <button type="button" onClick={onCancel} disabled={busy} className="field-tap" style={{ ...textButton, borderBottom: 'none', opacity: 0.7 }}>
           Cancel
         </button>
       </div>

@@ -86,7 +86,11 @@ export default function ProjectsPage() {
             </button>
           ))}
         </div>
+        <label htmlFor="projects-search" className="sr-only">
+          Search projects
+        </label>
         <input
+          id="projects-search"
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

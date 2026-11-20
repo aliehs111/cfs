@@ -53,10 +53,22 @@ def save_turn(conversation_id: str | None, role: str | None, transcript: list[di
         "status": "complete" if complete else "in_progress",
         "updated_at": _now().isoformat(),
     }
+    already_alerted_unfinished = False
     try:
         table = get_supabase().table(TABLE)
         if conversation_id:
             row["conversation_id"] = conversation_id
+            if complete:
+                # Did the sweeper already send the "left without finishing"
+                # email for this conversation? Then the visitor came back and
+                # finished, and that deserves its own email.
+                prior = (
+                    table.select("status, alerted_at").eq("conversation_id", conversation_id)
+                    .limit(1).execute().data
+                )
+                already_alerted_unfinished = bool(
+                    prior and prior[0].get("status") == "in_progress" and prior[0].get("alerted_at")
+                )
             res = table.upsert(row, on_conflict="conversation_id").execute()
         elif complete:
             # A page loaded before this change doesn't send an id: keep the old
@@ -76,7 +88,7 @@ def save_turn(conversation_id: str | None, role: str | None, transcript: list[di
               entity_type="project_response", entity_id=saved.get("id"),
               metadata={"role": role, "turns": turns})
     if complete and saved.get("id"):
-        send_intake_alert(saved, finished=True)
+        send_intake_alert(saved, finished=True, follow_up=already_alerted_unfinished)
 
 
 def _claim(row_id: str) -> bool:
@@ -91,9 +103,13 @@ def _claim(row_id: str) -> bool:
     return bool(res.data)
 
 
-def send_intake_alert(row: dict, finished: bool) -> None:
+def send_intake_alert(row: dict, finished: bool, follow_up: bool = False) -> None:
+    """follow_up: the "unfinished" email already went out and the visitor has
+    since finished; send the finished one anyway (it's the only one left)."""
     try:
-        if not _claim(row["id"]):
+        if follow_up:
+            get_supabase().table(TABLE).update({"alerted_at": _now().isoformat()}).eq("id", row["id"]).execute()
+        elif not _claim(row["id"]):
             return
         role_label = ROLE_LABELS.get(row.get("role"), "Not given")
         transcript = row.get("transcript") or [
@@ -102,7 +118,8 @@ def send_intake_alert(row: dict, finished: bool) -> None:
         ]
         turns = sum(1 for m in transcript if m.get("role") == "user")
         preview = " ".join((row.get("project_description") or "").split())[:60]
-        status = "Finished" if finished else "Left without finishing (didn't answer the last question)"
+        status = ("Finished (came back after the \"left without finishing\" email)" if follow_up
+                  else "Finished") if finished else "Left without finishing (didn't answer the last question)"
         text, html = render(
             "New project intake" if finished else "Project intake — left without finishing",
             [

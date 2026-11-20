@@ -61,8 +61,10 @@ function page(url, meta, preload = null) {
   let html = template
     .replace(/<title data-seo>[\s\S]*?<\/title>\s*/, '')
     .replace(/<meta data-seo name="description"[^>]*>\s*/, '')
-    .replace('<!--seo-tags-->', headTags(meta))
-    .replace('<div id="root"></div>', `${preloadScript}<div id="root">${appHtml}</div>`)
+    // Function replacers: a `$` in project text ($&, $1…) would otherwise be
+    // read as a replacement pattern and garble the page.
+    .replace('<!--seo-tags-->', () => headTags(meta))
+    .replace('<div id="root"></div>', () => `${preloadScript}<div id="root">${appHtml}</div>`)
   // The home page uses the 2026 palette (PaletteScope in App.jsx); set it in
   // the HTML so it shows correctly before JavaScript runs.
   if (url === '/') html = html.replace('<html lang="en">', '<html lang="en" data-palette="2026">')

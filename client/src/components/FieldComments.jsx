@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
 import { apiFetch, isAdmin, readError } from '../lib/auth'
 
 const MAX_LENGTH = 2000
@@ -43,9 +42,6 @@ function timeAgo(iso) {
 }
 
 export default function FieldComments({ post, user }) {
-  // After signing in, come back to this page (In the Field or A Day in the Life).
-  const { pathname } = useLocation()
-  const loginPath = `/login?next=${encodeURIComponent(pathname)}`
   const [comments, setComments] = useState(post.comments || [])
   const liveCount = comments.filter((c) => !c.deleted).length
   const [open, setOpen] = useState(false)
@@ -65,18 +61,16 @@ export default function FieldComments({ post, user }) {
 
   const label = liveCount ? `${liveCount} comment${liveCount === 1 ? '' : 's'}` : user ? 'Comment' : null
 
+  // Signed-out visitors (the public) see existing comments read-only, and
+  // nothing at all on a post with none. Only staff accounts can comment, so
+  // there's no "Sign in to comment" prompt.
+  if (!label) return null
+
   return (
     <div style={{ marginTop: '1rem' }}>
-      {label && (
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={quiet}>
-          {open ? 'Hide comments' : label}
-        </button>
-      )}
-      {!label && (
-        <Link to={loginPath} style={{ ...quiet, textDecoration: 'none' }}>
-          Sign in to comment
-        </Link>
-      )}
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="field-tap" style={quiet}>
+        {open ? 'Hide comments' : label}
+      </button>
 
       {open && (
         <div style={{ marginTop: '1rem' }}>
@@ -93,13 +87,7 @@ export default function FieldComments({ post, user }) {
             </div>
           ))}
 
-          {user ? (
-            <Composer postId={post.id} onPosted={added} placeholder="Add a comment" />
-          ) : (
-            <Link to={loginPath} style={{ ...quiet, textDecoration: 'none' }}>
-              Sign in to comment
-            </Link>
-          )}
+          {user && <Composer postId={post.id} onPosted={added} placeholder="Add a comment" />}
         </div>
       )}
     </div>
@@ -161,19 +149,19 @@ function Comment({ comment, user, onChange, onRemoved, onReply, canReply }) {
         </p>
       )}
       {!editing && user && (
-        <div className="flex gap-4" style={{ marginTop: '0.3rem' }}>
+        <div className="flex gap-5" style={{ marginTop: '0.3rem' }}>
           {canReply && (
-            <button type="button" onClick={() => setReplying((r) => !r)} style={quiet}>
+            <button type="button" onClick={() => setReplying((r) => !r)} className="field-tap" style={quiet}>
               Reply
             </button>
           )}
           {canManage && (
-            <button type="button" onClick={() => setEditing(true)} style={quiet}>
+            <button type="button" onClick={() => setEditing(true)} className="field-tap" style={quiet}>
               Edit
             </button>
           )}
           {canManage && (
-            <button type="button" onClick={remove} style={quiet}>
+            <button type="button" onClick={remove} className="field-tap" style={quiet}>
               Delete
             </button>
           )}
@@ -241,12 +229,12 @@ function Composer({ postId, parentId, commentId, initial = '', placeholder, subm
         style={textareaStyle}
       />
       {error && <p style={{ color: 'var(--maroon-text)', fontSize: '0.75rem', margin: '0.3rem 0 0' }}>{error}</p>}
-      <div className="flex gap-4" style={{ marginTop: '0.5rem' }}>
-        <button type="submit" disabled={busy || !body.trim()} style={{ ...quiet, opacity: busy || !body.trim() ? 0.3 : 0.9 }}>
+      <div className="flex gap-5" style={{ marginTop: '0.5rem' }}>
+        <button type="submit" disabled={busy || !body.trim()} className="field-tap" style={{ ...quiet, opacity: busy || !body.trim() ? 0.3 : 0.9 }}>
           {busy ? 'Posting…' : submitLabel}
         </button>
         {onCancel && (
-          <button type="button" onClick={onCancel} style={quiet}>
+          <button type="button" onClick={onCancel} className="field-tap" style={quiet}>
             Cancel
           </button>
         )}

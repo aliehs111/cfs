@@ -78,6 +78,13 @@ export default function AdminProjects({ onUnauthorized, initialEditId }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null) // null | 'new' | project
+  const [notice, setNotice] = useState('') // "Saved …" message shown on the list for a few seconds
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(''), 5000)
+    return () => clearTimeout(t)
+  }, [notice])
 
   useEffect(() => {
     let cancelled = false
@@ -114,10 +121,12 @@ export default function AdminProjects({ onUnauthorized, initialEditId }) {
               ? d.projects.map((x) => (x.id === p.id ? p : x))
               : [p, ...d.projects],
           }))
+          setNotice(`Saved "${p.name}".`)
           setEditing(null)
         }}
         onDeleted={(id) => {
           setData((d) => ({ ...d, projects: d.projects.filter((x) => x.id !== id) }))
+          setNotice('Project deleted.')
           setEditing(null)
         }}
       />
@@ -126,6 +135,9 @@ export default function AdminProjects({ onUnauthorized, initialEditId }) {
 
   return (
     <div>
+      <p role="status" className="font-body" style={{ color: 'var(--off-white)', fontSize: '14px', fontWeight: 400, marginBottom: notice ? '1.5rem' : 0 }}>
+        {notice && `✓ ${notice}`}
+      </p>
       <div className="flex flex-wrap items-baseline justify-between gap-4 mb-10">
         <p className="font-body" style={{ color: soft, fontSize: '14px', fontWeight: 300, maxWidth: '36rem', lineHeight: 1.7 }}>
           Projects shown in the gallery. Hidden projects stay here but don&apos;t appear on the site.
@@ -187,11 +199,20 @@ const splitFlooring = (value) =>
     .map((s) => s.trim())
     .filter(Boolean)
 
+// The server accepts up to this many characters for the whole flooring list.
+const MAX_FLOORING_CHARS = 1000
+
 function FlooringPicker({ value, onChange }) {
   const [other, setOther] = useState('')
+  const [tooLong, setTooLong] = useState(false)
   const selected = splitFlooring(value)
   const has = (t) => selected.some((s) => s.toLowerCase() === t.toLowerCase())
-  const save = (list) => onChange(list.join(', '))
+  const save = (list) => {
+    const joined = list.join(', ')
+    const over = joined.length > MAX_FLOORING_CHARS
+    setTooLong(over)
+    if (!over) onChange(joined)
+  }
   const toggle = (t) => save(has(t) ? selected.filter((s) => s.toLowerCase() !== t.toLowerCase()) : [...selected, t])
   // Commas would split one type into two, so they're dropped.
   const addOther = () => {
@@ -257,6 +278,11 @@ function FlooringPicker({ value, onChange }) {
           + Add
         </button>
       </div>
+      {tooLong && (
+        <p role="alert" className="font-body" style={{ color: 'var(--maroon-text)', fontSize: '13px', marginTop: '8px' }}>
+          The flooring list is too long. Remove a type before adding another.
+        </p>
+      )}
     </fieldset>
   )
 }
@@ -290,6 +316,21 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
   const [dragKey, setDragKey] = useState(null)
   const fileInput = useRef(null)
   const uploadedHere = useRef([]) // paths uploaded in this form, to clean up on Cancel
+  // What the form looked like when it opened, to tell whether anything changed.
+  const snapshot = (f, list) => JSON.stringify([f, list.map((p) => p.path || p.url)])
+  const [initial] = useState(() => snapshot(form, photos))
+  const dirty = snapshot(form, photos) !== initial
+
+  // Warn before a refresh or closing the tab would throw the edits away.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
 
   const set = (k) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -367,6 +408,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
     e.preventDefault()
     setError('')
     if (photos.some((p) => p.status === 'error')) return setError('Remove the photos that failed to upload, or add them again.')
+    if (form.flooring_type.length > MAX_FLOORING_CHARS) return setError('The flooring list is too long. Remove a type and try again.')
     const num = (v) => (v === '' || v === null ? null : Number(String(v).replace(/[^\d]/g, '')) || null)
     const body = {
       ...form,
@@ -392,6 +434,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
   }
 
   const cancel = () => {
+    if (dirty && !window.confirm('Discard your changes?')) return
     const unsaved = uploadedHere.current
     if (unsaved.length) {
       apiFetch('/api/admin/projects/discard-uploads', { method: 'POST', body: JSON.stringify({ paths: unsaved }) }).catch(() => {})
@@ -404,6 +447,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
     setBusy(true)
     try {
       const res = await apiFetch(`/api/admin/projects/${project.id}`, { method: 'DELETE' })
+      if (res.status === 401 || res.status === 403) return onUnauthorized()
       if (!res.ok) throw new Error(await readError(res, 'Could not delete.'))
       onDeleted(project.id)
     } catch (err) {

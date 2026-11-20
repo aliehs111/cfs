@@ -83,13 +83,15 @@ function OpenContactModal({ onClose }) {
           aria-label="Close dialog"
           style={{
             position: 'absolute',
-            top: '16px',
-            right: '16px',
             background: 'none',
             border: 'none',
             color: 'rgba(236,228,215,0.55)',
             cursor: 'pointer',
-            padding: '8px',
+            padding: 0,
+            width: '44px',
+            height: '44px',
+            top: '8px',
+            right: '8px',
             fontSize: '22px',
             lineHeight: 1,
           }}
@@ -97,8 +99,7 @@ function OpenContactModal({ onClose }) {
           ×
         </button>
 
-        {!submitted && (
-          <>
+        {/* The title stays after sending so the dialog keeps its name. */}
             <h2
               id={titleId}
               className="font-display mb-3"
@@ -113,6 +114,7 @@ function OpenContactModal({ onClose }) {
             >
               Let's continue this conversation.
             </h2>
+            {!submitted && (
             <p
               className="font-body mb-10"
               style={{
@@ -124,8 +126,7 @@ function OpenContactModal({ onClose }) {
             >
               Send a message — anything you've shared with our intake tool will come with it.
             </p>
-          </>
-        )}
+            )}
 
         <ContactForm theme="dark" onSuccess={() => setSubmitted(true)} />
       </div>

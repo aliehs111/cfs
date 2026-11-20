@@ -124,6 +124,7 @@ BOT_MARKERS = ("bot", "crawler", "spider", "slurp", "headless", "lighthouse", "p
 
 
 @app.post("/api/track/visit", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute;1000/day")  # stops one source flooding the logs and digest
 async def track_visit(request: Request, payload: dict | None = None):
     """Page views for the Logs tab and weekly digest. No IP addresses stored."""
     payload = payload or {}

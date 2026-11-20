@@ -19,7 +19,7 @@ const MENU = [
   {
     label: 'How can we help?',
     items: [
-      { to: '/discuss', label: 'About your project' },
+      { to: '/discuss', label: 'Describe your project' },
       { to: '/contact', label: 'Contact form' },
     ],
   },
@@ -302,7 +302,7 @@ function MobileMenu({ onClose, returnFocusTo }) {
               <li key={entry.label} style={{ borderTop: '1px solid rgba(236, 228, 215, 0.08)', paddingTop: '14px' }}>
                 <span
                   className="uppercase"
-                  style={{ display: 'block', fontSize: '0.65rem', letterSpacing: '0.18em', color: 'var(--off-white)', opacity: 0.45 }}
+                  style={{ display: 'block', fontSize: '0.65rem', letterSpacing: '0.18em', color: 'var(--off-white)', opacity: 0.65 }} // ~6.5:1 on charcoal
                 >
                   {entry.label}
                 </span>
@@ -326,6 +326,17 @@ function MobileMenu({ onClose, returnFocusTo }) {
               </li>
             ),
           )}
+          {/* Tap to call, phones only (same number as the footer). */}
+          <li style={{ borderTop: '1px solid rgba(236, 228, 215, 0.08)' }}>
+            <a
+              href="tel:+18042547700"
+              onClick={onClose}
+              className="flex items-center justify-between text-sm uppercase no-underline"
+              style={{ color: 'var(--off-white)', letterSpacing: '0.18em', padding: '14px 0' }}
+            >
+              <span style={{ opacity: 0.8 }}>Call (804) 254-7700</span>
+            </a>
+          </li>
         </ul>
       </nav>
     </div>

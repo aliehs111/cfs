@@ -36,6 +36,25 @@ const fieldStyle = {
   caretColor: 'var(--maroon)',
 }
 
+// Small visible label shown above a field.
+const fieldLabel = {
+  display: 'block',
+  color: muted,
+  fontSize: '11px',
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  marginBottom: '2px',
+}
+
+function Labeled({ label, children }) {
+  return (
+    <label className="font-body block">
+      <span style={fieldLabel}>{label}</span>
+      {children}
+    </label>
+  )
+}
+
 const selectStyle = {
   ...fieldStyle,
   backgroundColor: 'var(--charcoal)',
@@ -250,16 +269,24 @@ function AddUserForm({ roles, onCreated, onCancel, onUnauthorized }) {
         Add user
       </p>
       <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
-        <input aria-label="First name" placeholder="First name" value={form.first_name} onChange={set('first_name')} required autoFocus style={fieldStyle} />
-        <input aria-label="Last name" placeholder="Last name" value={form.last_name} onChange={set('last_name')} required style={fieldStyle} />
-        <input aria-label="Email" placeholder="Email" type="email" autoCapitalize="none" value={form.email} onChange={set('email')} required style={fieldStyle} />
-        <select aria-label="Role" value={form.role} onChange={set('role')} style={selectStyle}>
-          {roles.map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r]} — {ROLE_HELP[r]}
-            </option>
-          ))}
-        </select>
+        <Labeled label="First name">
+          <input value={form.first_name} onChange={set('first_name')} required autoFocus style={fieldStyle} />
+        </Labeled>
+        <Labeled label="Last name">
+          <input value={form.last_name} onChange={set('last_name')} required style={fieldStyle} />
+        </Labeled>
+        <Labeled label="Email">
+          <input type="email" autoCapitalize="none" value={form.email} onChange={set('email')} required style={fieldStyle} />
+        </Labeled>
+        <Labeled label="Role">
+          <select value={form.role} onChange={set('role')} style={selectStyle}>
+            {roles.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]} — {ROLE_HELP[r]}
+              </option>
+            ))}
+          </select>
+        </Labeled>
       </div>
       {error && (
         <p className="font-body text-xs mt-4" role="alert" style={{ color: 'var(--maroon-text)' }}>
@@ -335,10 +362,16 @@ function UserRow({ user, me, roles, onSaved, onPasswordReset, onUnauthorized }) 
       <div className="grid md:grid-cols-12 gap-4 items-start">
         <div className="md:col-span-4 min-w-0">
           {editing ? (
-            <div className="grid gap-2">
-              <input aria-label="First name" value={form.first_name} onChange={set('first_name')} style={fieldStyle} />
-              <input aria-label="Last name" value={form.last_name} onChange={set('last_name')} style={fieldStyle} />
-              <input aria-label="Email" type="email" value={form.email} onChange={set('email')} style={fieldStyle} />
+            <div className="grid gap-3">
+              <Labeled label="First name">
+                <input value={form.first_name} onChange={set('first_name')} style={fieldStyle} />
+              </Labeled>
+              <Labeled label="Last name">
+                <input value={form.last_name} onChange={set('last_name')} style={fieldStyle} />
+              </Labeled>
+              <Labeled label="Email">
+                <input type="email" autoCapitalize="none" value={form.email} onChange={set('email')} style={fieldStyle} />
+              </Labeled>
             </div>
           ) : (
             <>

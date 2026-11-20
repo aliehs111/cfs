@@ -141,14 +141,15 @@ alter table field_posts enable row level security;
 
 -- Public storage bucket for the photos/videos. Uploads go through signed
 -- URLs issued by the backend, so no storage policies are needed.
--- file_size_limit: 50 MB matches the Supabase free-plan cap. On Pro you can
--- raise it (and MAX_VIDEO_MB in client/src/pages/FieldPostPage.jsx).
+-- file_size_limit: 200 MB. Must not exceed the project's global file size
+-- limit (Storage > Settings), and must match MAX_VIDEO_MB in
+-- client/src/pages/FieldPostPage.jsx and client/src/components/FieldPostEditor.jsx.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'field-media',
   'field-media',
   true,
-  52428800,
+  209715200,
   array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm']
 )
 on conflict (id) do nothing;

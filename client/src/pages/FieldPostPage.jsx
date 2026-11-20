@@ -8,9 +8,10 @@ import { fileType, prepareImage, putWithProgress } from '../lib/upload'
 
 const LOGIN_PATH = '/login?next=/in-the-field/post'
 
-// Supabase free plan caps each file at 50 MB. Raise this (and the bucket's
-// file_size_limit in schema.sql) if the project moves to a paid plan.
-const MAX_VIDEO_MB = 50
+// Must match the field-media bucket's file size limit in Supabase (and the
+// project's global file size limit, which caps every bucket). Also set in
+// components/FieldPostEditor.jsx and schema.sql.
+const MAX_VIDEO_MB = 200
 const MAX_FILES = 10
 
 const inputStyle = {
@@ -368,7 +369,7 @@ function PostManager({ user, onUnauthorized }) {
           }}
         />
         <p style={{ fontSize: '0.75rem', opacity: 0.55, marginTop: '0.6rem' }}>
-          Up to {MAX_FILES} per post. Videos up to {MAX_VIDEO_MB} MB (about a minute of 1080p).
+          Up to {MAX_FILES} per post. Videos up to {MAX_VIDEO_MB} MB.
         </p>
 
         <label style={labelStyle} htmlFor="field-caption">What's happening</label>

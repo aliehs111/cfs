@@ -7,7 +7,8 @@ import { fileType, prepareImage, putWithProgress } from '../lib/upload'
 // Used on the public feed and on the posting page.
 
 const MAX_FILES = 10
-const MAX_VIDEO_MB = 50
+// Must match the field-media bucket's file size limit in Supabase.
+const MAX_VIDEO_MB = 200
 
 const inputStyle = {
   width: '100%',

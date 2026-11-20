@@ -464,8 +464,13 @@ Table: `notification_settings` — `alert_type` (primary key), `enabled` bool, `
 **Status:** Started. RLS is enabled (no policies) on every table as of Nov 2026, and `schema.sql` matches. The rest below is still to do. **Before launch.**
 
 1. **Move the Railway services to a US East region.** *(Still to do, Nov 2026: a dashboard setting.)* The `cfs` server service currently runs in **Southeast Asia**. Every API call and chat message from Virginia goes around the world and back. Railway → service → Settings → Region. Check the frontend service too.
-2. **Supabase plan.** Free-plan projects **pause after about a week with no activity**, which takes the whole site down until someone un-pauses it, and the free plan has **no automatic backups**. Recommend **Pro (~$25/month)** for a client's production site. If staying on free for now: set up a weekly backup (`pg_dump` export) and a scheduled ping to keep the project awake, and accept the risk.
-3. **Storage limits.** The free plan includes 1 GB of file storage, and In the Field videos will use that up fast. Pro includes 100 GB and allows larger video uploads (raise `file_size_limit` on the `field-media` bucket and `MAX_VIDEO_MB` in `FieldPostPage.jsx`).
+2. **Supabase plan.** *(Done.)* The project is on **Pro (~$25/month)**, so it won't pause when inactive, and daily backups are included.
+3. **Storage limits.** *(Done, Nov 2026.)* Pro includes 100 GB of file storage. The video upload limit is **200 MB**, set in three places in Supabase and in the code, which must agree:
+   - Supabase → Storage → Settings → **Global file size limit**: 200 MB. This is per project, and it caps every bucket.
+   - Supabase → Storage → `field-media` bucket → **Restrict file size**: 200 MB.
+   - `MAX_VIDEO_MB = 200` in `client/src/pages/FieldPostPage.jsx` and `client/src/components/FieldPostEditor.jsx`, and `file_size_limit` in `schema.sql`.
+
+   To change the limit, update Supabase first (global, then bucket), then the code.
 4. Confirm `ENV=production` is set on the Railway server service; it controls secure cookie settings.
 
 **Done when:** both services run in a US region; Supabase can't pause on its own; a backup exists and a restore has been tried once.
@@ -482,7 +487,7 @@ The site depends on these accounts. For each, decide **who owns it** (Cavalier o
 |---|---|---|
 | Domain registrar | The domain | ~$15–25/yr |
 | Railway | Hosts frontend and backend | ~$5–20/mo depending on usage |
-| Supabase | Database + file storage | Free, or $25/mo Pro (see section 6) |
+| Supabase | Database + file storage | $25/mo Pro (see section 6) |
 | Anthropic | Chat widget + `/discuss` AI | Usage-based; likely a few $/mo at this traffic |
 | Gmail SMTP (section 4) | Email alerts | Free |
 | Cloudflare Turnstile (section 5) | Spam protection | Free |

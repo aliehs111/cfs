@@ -208,6 +208,63 @@ main {
   border-color: var(--maroon);
 }
 
+/* Project card photo slideshow (Nov 2026): dots when there's more than one
+   photo; arrows appear on hover or keyboard focus, and always on touch
+   screens (which also swipe). */
+.project-thumb-wrap {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+.project-thumb-wrap .project-thumb {
+  margin-bottom: 0;
+}
+.project-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.project-arrow-prev { left: 10px; }
+.project-arrow-next { right: 10px; }
+.project-card:hover .project-arrow,
+.project-card:focus-within .project-arrow {
+  opacity: 1;
+}
+@media (hover: none) {
+  .project-arrow { opacity: 0.85; }
+}
+.project-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+.project-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+.project-dots span.active {
+  background: #fff;
+}
+
 .project-card:hover .project-card-name {
   color: var(--maroon-text);
 }

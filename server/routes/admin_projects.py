@@ -24,7 +24,7 @@ require_admin = auth.require_roles(*auth.ADMIN_ROLES)
 
 TABLE = "projects"
 BUCKET = "project-images"
-MAX_IMAGES = 10
+MAX_IMAGES = 20
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 # Must match the filter buttons in client/src/pages/ProjectsPage.jsx.
 PROJECT_TYPES = ["Healthcare", "Retail", "Multi-family", "Office / Corporate", "Higher Education"]

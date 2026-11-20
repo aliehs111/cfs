@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { readPreload } from '../preload'
 
@@ -119,14 +119,86 @@ export default function ProjectsPage() {
   )
 }
 
-function ProjectCard({ project }) {
-  const thumb = project.image_urls?.[0]
+// Cover photo, or a small slideshow when the project has several photos.
+// Clicking the photo opens the project; the arrows (and swiping on a phone)
+// step through the photos instead.
+function ProjectThumb({ project }) {
+  const images = project.image_urls || []
+  const [index, setIndex] = useState(0)
+  const touchX = useRef(null)
+  const swiped = useRef(false)
+  const count = images.length
+  const go = (delta) => setIndex((i) => (i + delta + count) % count)
+  const url = images[index]
+
   return (
-    <Link to={`/projects/${project.slug}`} className="project-card">
-      <div
-        className="project-thumb"
-        style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}
-      />
+    <div
+      className="project-thumb-wrap"
+      onTouchStart={(e) => {
+        touchX.current = e.touches[0].clientX
+        swiped.current = false
+      }}
+      onTouchEnd={(e) => {
+        if (touchX.current === null || count < 2) return
+        const dx = e.changedTouches[0].clientX - touchX.current
+        touchX.current = null
+        if (Math.abs(dx) > 40) {
+          swiped.current = true
+          go(dx < 0 ? 1 : -1)
+        }
+      }}
+    >
+      {/* The text link below is the one keyboards and screen readers use. */}
+      <Link
+        to={`/projects/${project.slug}`}
+        tabIndex={-1}
+        aria-hidden="true"
+        onClick={(e) => {
+          if (swiped.current) {
+            e.preventDefault() // a swipe changed the photo; don't open the project
+            swiped.current = false
+          }
+        }}
+      >
+        <div className="project-thumb" style={url ? { backgroundImage: `url(${url})` } : undefined} />
+      </Link>
+      {count > 1 && (
+        <>
+          <button
+            type="button"
+            className="project-arrow project-arrow-prev"
+            aria-label={`Previous photo of ${project.name}`}
+            onClick={() => go(-1)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button
+            type="button"
+            className="project-arrow project-arrow-next"
+            aria-label={`Next photo of ${project.name}`}
+            onClick={() => go(1)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+          <div className="project-dots" aria-hidden="true">
+            {images.map((u, n) => (
+              <span key={n} className={n === index ? 'active' : undefined} />
+            ))}
+          </div>
+          <span className="sr-only" aria-live="polite">
+            Photo {index + 1} of {count}
+          </span>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ProjectCard({ project }) {
+  return (
+    <div className="project-card">
+      <ProjectThumb project={project} />
+      <Link to={`/projects/${project.slug}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
       <p
         className="uppercase"
         style={{
@@ -177,6 +249,7 @@ function ProjectCard({ project }) {
           {project.short_description}
         </p>
       )}
-    </Link>
+      </Link>
+    </div>
   )
 }

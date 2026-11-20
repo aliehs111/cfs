@@ -5,10 +5,10 @@ import { fileType, prepareImage, putWithProgress } from '../lib/upload'
 const muted = 'rgba(236,228,215,0.55)'
 const soft = 'rgba(236,228,215,0.7)'
 const hairline = '1px solid rgba(236,228,215,0.08)'
-const MAX_PHOTOS = 10
+const MAX_PHOTOS = 20
 
-// Suggestions only: the founder hasn't signed off on a fixed list yet
-// (see knowledge_base.md "What Cavalier does"), so any text is allowed.
+// The flooring types offered as buttons in the project form. Not a fixed list:
+// admins can add any other type by hand (see FlooringPicker).
 const FLOORING_SUGGESTIONS = [
   'Carpet tile',
   'Broadloom carpet',
@@ -166,9 +166,98 @@ export default function AdminProjects({ onUnauthorized, initialEditId }) {
           >
             {p.is_public ? 'Public' : 'Hidden'}
           </span>
+          <span
+            className="font-body text-xs uppercase shrink-0"
+            style={{ letterSpacing: '0.12em', color: 'var(--off-white)', borderBottom: '1px solid rgba(236,228,215,0.35)', paddingBottom: '2px' }}
+          >
+            Edit
+          </span>
         </button>
       ))}
     </div>
+  )
+}
+
+// Flooring types: click as many as apply, or add one that isn't listed.
+// Saved as one comma-separated text value ("LVT, Carpet tile"), the same
+// shape as before, so existing projects and the project page are unchanged.
+const splitFlooring = (value) =>
+  (value || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+function FlooringPicker({ value, onChange }) {
+  const [other, setOther] = useState('')
+  const selected = splitFlooring(value)
+  const has = (t) => selected.some((s) => s.toLowerCase() === t.toLowerCase())
+  const save = (list) => onChange(list.join(', '))
+  const toggle = (t) => save(has(t) ? selected.filter((s) => s.toLowerCase() !== t.toLowerCase()) : [...selected, t])
+  // Commas would split one type into two, so they're dropped.
+  const addOther = () => {
+    const t = other.replace(/,/g, ' ').replace(/\s+/g, ' ').trim()
+    if (t && !has(t)) save([...selected, t])
+    setOther('')
+  }
+  // Types typed in by hand (or saved before this picker) show as chips too.
+  const custom = selected.filter((s) => !FLOORING_SUGGESTIONS.some((f) => f.toLowerCase() === s.toLowerCase()))
+
+  const chip = (t) => {
+    const on = has(t)
+    return (
+      <button
+        key={t}
+        type="button"
+        aria-pressed={on}
+        onClick={() => toggle(t)}
+        className="font-body"
+        style={{
+          minHeight: 34,
+          padding: '4px 12px',
+          fontSize: '13px',
+          fontWeight: 300,
+          cursor: 'pointer',
+          color: on ? 'var(--white)' : soft,
+          backgroundColor: on ? 'var(--maroon)' : 'transparent',
+          border: `1px solid ${on ? 'var(--maroon)' : 'rgba(236,228,215,0.25)'}`,
+        }}
+      >
+        {on ? '✓ ' : ''}
+        {t}
+      </button>
+    )
+  }
+
+  return (
+    <fieldset className="md:col-span-2" style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}>
+      <legend style={{ ...labelStyle, padding: 0 }}>Flooring (choose all that apply)</legend>
+      <div className="flex flex-wrap gap-2" style={{ marginTop: '8px' }}>
+        {FLOORING_SUGGESTIONS.map(chip)}
+        {custom.map(chip)}
+      </div>
+      <div className="flex items-end gap-4" style={{ marginTop: '12px', maxWidth: '28rem' }}>
+        <div className="flex-1" style={{ minWidth: 0 }}>
+          <label htmlFor="p-flooring-other" className="sr-only">Other flooring type</label>
+          <input
+            id="p-flooring-other"
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault() // add the type instead of saving the form
+                addOther()
+              }
+            }}
+            maxLength={60}
+            style={fieldStyle}
+            placeholder="Other type, e.g. Epoxy"
+          />
+        </div>
+        <button type="button" onClick={addOther} disabled={!other.trim()} className="font-body text-xs uppercase" style={{ ...action, opacity: other.trim() ? 1 : 0.5, paddingBottom: '8px' }}>
+          + Add
+        </button>
+      </div>
+    </fieldset>
   )
 }
 
@@ -373,15 +462,6 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
           </select>
         </div>
         <div>
-          <label style={labelStyle} htmlFor="p-flooring">Flooring</label>
-          <input id="p-flooring" list="flooring-options" value={form.flooring_type} onChange={set('flooring_type')} maxLength={300} style={fieldStyle} placeholder="e.g. LVT, carpet tile" />
-          <datalist id="flooring-options">
-            {FLOORING_SUGGESTIONS.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
-        </div>
-        <div>
           <label style={labelStyle} htmlFor="p-location">Location</label>
           <input id="p-location" value={form.location} onChange={set('location')} maxLength={200} style={fieldStyle} placeholder="e.g. Charlottesville, VA" />
         </div>
@@ -395,6 +475,10 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
             <input id="p-sqft" inputMode="numeric" value={form.square_footage} onChange={set('square_footage')} maxLength={12} style={fieldStyle} placeholder="18000" />
           </div>
         </div>
+        <FlooringPicker
+          value={form.flooring_type}
+          onChange={(v) => setForm((f) => ({ ...f, flooring_type: v }))}
+        />
         <div className="md:col-span-2">
           <label style={labelStyle} htmlFor="p-short">Short description (gallery card)</label>
           <textarea id="p-short" value={form.short_description} onChange={set('short_description')} rows={2} maxLength={600} style={{ ...fieldStyle, resize: 'vertical' }} />
@@ -406,7 +490,25 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
       </div>
 
       <div className="mt-10">
-        <p style={labelStyle}>Photos ({photos.length}/{MAX_PHOTOS}) — the first is the cover. Drag to reorder, or use the arrows.</p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <p style={{ ...labelStyle, marginBottom: 0 }}>
+            Photos ({photos.length}/{MAX_PHOTOS}) — the first is the cover. Drag to reorder, or use the arrows.
+          </p>
+          {photos.length < MAX_PHOTOS ? (
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="font-body text-xs uppercase"
+              style={{ ...action, color: 'var(--off-white)', borderBottom: '1px solid rgba(236,228,215,0.35)', paddingBottom: '3px' }}
+            >
+              + Add photos
+            </button>
+          ) : (
+            <p className="font-body text-xs" style={{ color: muted }}>
+              {MAX_PHOTOS} is the most a project can have. Remove one (✕) to add another.
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-3">
           {photos.map((p, i) => (
             <div
@@ -459,7 +561,7 @@ function ProjectEditor({ project, projectTypes, onSaved, onCancel, onDeleted, on
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
-              style={{ aspectRatio: '4 / 3', border: '1px dashed rgba(236,228,215,0.3)', background: 'transparent', color: 'var(--off-white)', cursor: 'pointer', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase' }}
+              style={{ aspectRatio: '4 / 3', border: '1px dashed rgba(236,228,215,0.6)', background: 'transparent', color: 'var(--off-white)', cursor: 'pointer', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase' }}
             >
               + Add photos
             </button>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import FieldComments from '../components/FieldComments'
 import FieldPostEditor from '../components/FieldPostEditor'
@@ -346,6 +346,74 @@ function MediaCarousel({ post, onOpenImage, aspect }) {
   )
 }
 
+// Grid cards show the same number of caption lines. Longer captions get a
+// More / Less toggle, which only appears when the text is actually cut off.
+const CAPTION_LINES = 5
+
+function ClampedCaption({ text }) {
+  const ref = useRef(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || expanded) return
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    // Re-check when the card width changes (window resize, grid columns).
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text, expanded])
+
+  return (
+    <>
+      <p
+        ref={ref}
+        style={{
+          fontSize: '0.9rem',
+          lineHeight: 1.75,
+          color: 'var(--off-white)',
+          opacity: 0.8,
+          marginTop: '0.6rem',
+          marginBottom: 0,
+          whiteSpace: 'pre-line',
+          ...(expanded
+            ? {}
+            : {
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: CAPTION_LINES,
+                overflow: 'hidden',
+              }),
+        }}
+      >
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="text-xs uppercase transition-opacity duration-300 hover:opacity-50"
+          style={{
+            color: 'var(--off-white)',
+            letterSpacing: '0.14em',
+            background: 'none',
+            border: 'none',
+            borderBottom: '1px solid rgba(236,228,215,0.3)',
+            cursor: 'pointer',
+            padding: '0 0 3px',
+            marginTop: '0.6rem',
+          }}
+        >
+          {expanded ? 'Less' : 'More'}
+        </button>
+      )}
+    </>
+  )
+}
+
 // Grid view: compact card.
 export function FieldPostCard({ post, onOpenImage, footer }) {
   return (
@@ -364,20 +432,7 @@ export function FieldPostCard({ post, onOpenImage, footer }) {
         {formatPostDate(post.created_at)}
         {post.location ? ` · ${post.location}` : ''}
       </p>
-      {post.caption && (
-        <p
-          style={{
-            fontSize: '0.9rem',
-            lineHeight: 1.75,
-            color: 'var(--off-white)',
-            opacity: 0.8,
-            marginTop: '0.6rem',
-            whiteSpace: 'pre-line',
-          }}
-        >
-          {post.caption}
-        </p>
-      )}
+      {post.caption && <ClampedCaption text={post.caption} />}
       {post.author && (
         <p
           style={{

@@ -11,11 +11,12 @@ def client_ip(request: Request) -> str:
     X-Forwarded-For is the one added by Railway's edge (earlier entries can be
     faked by the client).
     """
-    # NOTE (Nov 20 2026): X-Real-IP is trusted first. That is only safe if
-    # Railway's edge overwrites it on every request; if it passes a visitor's
-    # own X-Real-IP through, a visitor could fake it and dodge every rate
-    # limit. Not yet confirmed; check Railway's docs or send a request with a
-    # made-up X-Real-IP and see what the server logs. Behavior left unchanged.
+    # Tested on Railway Nov 20 2026: a request sent with a made-up
+    # "X-Real-IP: 1.2.3.4" still arrived with the visitor's real IP, so
+    # Railway's edge overwrites X-Real-IP and it can't be faked. (The last
+    # X-Forwarded-For entry turned out to be a Railway edge address, not the
+    # visitor, so the fallback below would be wrong on Railway; it is only
+    # reached if X-Real-IP is ever missing, e.g. a different host.)
     real_ip = request.headers.get("x-real-ip")
     if real_ip:
         return real_ip.strip()

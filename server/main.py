@@ -98,23 +98,6 @@ async def health():
     return {"status": "ok"}
 
 
-# TEMPORARY (Nov 20 2026): shows which IP the rate limiter uses for the caller,
-# to test whether a visitor can fake it with an X-Real-IP header on Railway.
-# It only echoes the caller's own request, so it reveals nothing about anyone
-# else. Remove once the test is done (see the comment in limiter.py).
-@app.get("/api/ip-check")
-@limiter.limit("20/minute")
-async def ip_check(request: Request):
-    from limiter import client_ip
-
-    return {
-        "limiter_uses": client_ip(request),
-        "x_real_ip": request.headers.get("x-real-ip"),
-        "x_forwarded_for": request.headers.get("x-forwarded-for"),
-        "socket": request.client.host if request.client else None,
-    }
-
-
 def _device(ua: str) -> str:
     ua = ua.lower()
     if "ipad" in ua or "tablet" in ua or ("android" in ua and "mobile" not in ua):
